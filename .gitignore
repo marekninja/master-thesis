@@ -131,8 +131,7 @@ dmypy.json
 #custom
 .idea
 **/.DS_Store
-MRPC.zip
+**/MRPC.zip
 
-
-/MRPC/pytorch_model.bin
-/MRPC/quantized/pytorch_model.bin
+**/MRPC/pytorch_model.bin
+**/MRPC/quantized/pytorch_model.bin
