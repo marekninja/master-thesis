@@ -19,6 +19,7 @@ Vystup prace by mal byt:
 
 ## Evaluation of pretrained model 
 [Jupyter notebook](examples/train_and_eval/eval_pretrained.ipynb)
+
 INT8 quantized model(MarianMT) has nearly same BLEU score and is 1.7times faster than in FP
 
 
