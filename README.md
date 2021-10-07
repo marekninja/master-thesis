@@ -17,7 +17,19 @@ Vystup prace by mal byt:
 
 ## Notes
 
+## Evaluation of pretrained model 
+[Jupyter notebook](examples/train_and_eval/eval_pretrained.ipynb)
+INT8 quantized model(MarianMT) has nearly same BLEU score and is 1.7times faster than in FP
+
+
 ### GLUE Bert Quantization
 [Jupyter notebook](examples/glue_quantization/notes_examples.ipynb)
 
 from: https://pytorch.org/tutorials/intermediate/dynamic_quantization_bert_tutorial.html
+
+
+### Loding and quantization of pretrained models
+[Jupyter notebook](examples/loadings/pretrained_model_quant.ipynb)
+
+
+Also contains dataset preprocessing
