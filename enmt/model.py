@@ -1,4 +1,4 @@
-from eval_nmt.quant_helper import QuantizationMode, get_quant_backend
+from enmt.quant_helper import QuantizationMode, get_quant_backend
 
 from enum import Enum
 import torch
@@ -30,7 +30,8 @@ class ModelWrapper():
             self.tokenizer = AutoTokenizer.from_pretrained(
                 pretrained_model_name_or_path)
             self.isQuantized = False
-
+            print(
+                f"Created model {pretrained_model_name_or_path} succesfully!")
         else:
             self.pretrained_model_name_or_path = None,
             self.model = model
@@ -45,8 +46,10 @@ class ModelWrapper():
         """
         self.model = _makeQuantized(self, mode).model
         self.isQuantized = True
+        print(
+            f"{self.pretrained_model_name_or_path} quantized using {mode} succesfully!")
 
-    def get_quantized(self, mode: QuantizationMode) -> ModelWrapper:
+    def _get_quantized(self, mode: QuantizationMode):
         """Creates and returns quantized ModelWrapper
 
         Args:
