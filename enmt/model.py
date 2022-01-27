@@ -3,6 +3,7 @@ from enmt.quant_helper import QuantizationMode, get_quant_backend
 from enum import Enum
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import os
 
 
 class ModelWrapper():
@@ -67,6 +68,12 @@ class ModelWrapper():
         model_type = type(self.model)
         self.model = model_type(config)
 
+    def getSize(self) -> float:
+        torch.save(self.model.state_dict(), "temp.p")
+        size = os.path.getsize("temp.p")/1e6
+        os.remove('temp.p')
+        return size
+
 
 def _makeQuantized(model_wrapped: ModelWrapper, mode: QuantizationMode) -> ModelWrapper:
     if not isinstance(mode, QuantizationMode):
@@ -86,8 +93,8 @@ def _makeQuantized(model_wrapped: ModelWrapper, mode: QuantizationMode) -> Model
 
 def _dynamic_quant(model_wrapped: ModelWrapper):
     print(
-        f"Using '{get_quant_backend}' engine for quantization")
-
+        f"Using '{get_quant_backend()}' engine for quantization")
+    model_wrapped.model.to('cpu')
     quantized_model = torch.quantization.quantize_dynamic(
         model_wrapped.model, {torch.nn.Linear}, dtype=torch.qint8
     )
