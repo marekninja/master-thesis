@@ -3,12 +3,14 @@ from enmt.results import Dataset
 from datasets import load_dataset
 
 
-class OpenSubtitles(Dataset):
-    def __init__(self, dataset_name="open_subtitles", lang1="en", lang2="sk", split=Split.EVAL, test_size=1.0) -> None:
+
+class EuroParl(Dataset):
+    # FIXME maybe split is not needed
+    def __init__(self, dataset_name="europarl_bilingual", lang1="en", lang2="sk", split=Split.EVAL, test_size=1.0) -> None:
         # Dataset, self
         super().__init__(dataset_name, lang1=lang1, lang2=lang2, split=split, test_size=test_size)
 
-    def load(self, dataset_name="open_subtitles", lang1="en", lang2="sk"):
+    def load(self, dataset_name="europarl_bilingual", lang1="en", lang2="sk"):
         return load_dataset(
             dataset_name, lang1=lang1, lang2=lang2)
 

@@ -1,17 +1,19 @@
 import comet_ml
+
 from enum import Enum
 from transformers import Seq2SeqTrainer
 from transformers import Seq2SeqTrainingArguments
 from transformers.integrations import CometCallback
-from datasets import load_dataset
+
+from .dataset import Dataset
 from datasets import load_metric
-from tqdm.auto import tqdm
 
 from typing import List
 
 from transformers.data.data_collator import DataCollatorForSeq2Seq
 from enmt.model import ModelWrapper
 import numpy as np
+
 
 
 class Scenario(Enum):
@@ -30,71 +32,8 @@ class Scenario(Enum):
     QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
-class Dataset():
-
-    def __init__(self, dataset_name, lang1, lang2) -> None:
-        self.dataset = self.load(dataset_name, lang1, lang2)
-        self.source_lang = lang1
-        self.target_lang = lang2
-        self.sets = None
-
-    def __getitem__(self, key):
-        if self.sets is not None:
-            return self.sets[key]
-        else:
-            return None
-
-    def load(self, dataset_name, lang1, lang2):
-        self.dataset = load_dataset(
-            dataset_name, lang1=lang1, lang2=lang2)
-
-    def _check_split(self, dataset):
-        keys = dataset.keys()
-
-        sets = {}
-        for i in ['train', 'validation', 'test']:
-            if i in keys:
-                sets[i] = dataset[i]
-            else:
-                sets[i] = None
-
-        if 'train' in keys and 'test' not in keys:
-            if 'train' in keys:
-                new = dataset['train'].train_test_split(test_size=0.2, seed=1)
-                sets['train'] = new['train']
-                sets['test'] = new['test']
-
-        if 'train' not in keys:
-            raise RuntimeError("Dataset does not have 'train' split")
-
-        self.sets = sets
-
-    def preprocess(self, tokenizer, max_input_length, max_target_length, prefix):
-        self.tokenizer = tokenizer
-        self.max_input_length = max_input_length
-        self.max_target_length = max_target_length
-        self.prefix = prefix
-        dataset = self.dataset.map(self._preprocess_function, batched=True)
-        self._check_split(dataset)
-
-    def _preprocess_function(self, examples):
-        inputs = [self.prefix + ex[self.source_lang]
-                  for ex in examples["translation"]]
-        targets = [ex[self.target_lang] for ex in examples["translation"]]
-        model_inputs = self.tokenizer(
-            inputs, max_length=self.max_input_length, truncation=True)
-
-        # Setup the tokenizer for targets
-        with self.tokenizer.as_target_tokenizer():
-            labels = self.tokenizer(
-                targets, max_length=self.max_target_length, truncation=True)
-
-        model_inputs["labels"] = labels["input_ids"]
-        return model_inputs
-
-
 class Pipeline():
-    """Pipeline class, implementig scenarios
+    """Pipeline class, implementing scenarios
     """
 
     def __init__(self, scenario: Scenario, model: ModelWrapper, dataset_train: Dataset = None, dataset_eval: Dataset = None,
@@ -127,9 +66,17 @@ class Pipeline():
 
         config = self.model.config.to_dict()
 
-        dataset_eval.preprocess(
-            tokenizer=self.tokenizer,
-            max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
+        if dataset_eval is not None:
+            dataset_eval.preprocess(
+                tokenizer=self.tokenizer,
+                max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
+
+        if dataset_train is not None:
+            dataset_train.preprocess(
+                tokenizer=self.tokenizer,
+                max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
+
+
 
         self.trainer = Seq2SeqTrainer(
             self.model,
