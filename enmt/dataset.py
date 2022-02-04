@@ -23,7 +23,7 @@ class Split(Enum):
 class Dataset():
 
     # FIXME maybe split is not needed
-    def __init__(self, dataset_name:str, lang1:str, lang2:str, split: Split, test_size:float) -> None:
+    def __init__(self, dataset_name:str, lang1:str, lang2:str, split: Split, test_size:float, seed=1) -> None:
         self.dataset = self.load(dataset_name, lang1, lang2)
         self.name = dataset_name
         self.source_lang = lang1
@@ -31,6 +31,7 @@ class Dataset():
         self.test_size = test_size
         self.split = split
         self.sets = None
+        self.seed = seed
 
     def __getitem__(self, key):
         if self.sets is not None:

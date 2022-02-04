@@ -5,15 +5,16 @@ from transformers import Seq2SeqTrainer
 from transformers import Seq2SeqTrainingArguments
 from transformers.integrations import CometCallback
 
+from .qat_trainer import QatTrainingArgs, QatTrainer
 from .dataset import Dataset
 from datasets import load_metric
 
 from typing import List
 
 from transformers.data.data_collator import DataCollatorForSeq2Seq
-from enmt.model import ModelWrapper
+from enmt.model_wrapper import ModelWrapper
 import numpy as np
-
+import torch
 
 
 class Scenario(Enum):
@@ -28,7 +29,7 @@ class Scenario(Enum):
     """
     EVAL = "evaluate"
     TRAIN_EVAL = "TRAIN_EVAL"
-    QUANT_AWARE_TUNE_EVAL = "QUANT_AWARE_TUNE_EVAL"
+    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"
     QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
@@ -36,7 +37,8 @@ class Pipeline():
     """Pipeline class, implementing scenarios
     """
 
-    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset_train: Dataset = None, dataset_eval: Dataset = None,
+    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset_train: Dataset = None,
+                 dataset_eval: Dataset = None,
                  training_args={'evaluation_strategy': 'epoch',
                                 'learning_rate': 2e-5,
                                 'per_device_train_batch_size': 4,
@@ -47,7 +49,7 @@ class Pipeline():
                                 'predict_with_generate': True,
                                 'no_cuda': True,
                                 'fp16': False,
-                                'push_to_hub': False}):
+                                'push_to_hub': False}, callbacks=None):
 
         # model_name = model_checkpoint.split("/")[-1]
         self.model = model.model
@@ -56,10 +58,18 @@ class Pipeline():
         self.metric = load_metric("sacrebleu")
         self.scenario = scenario
 
-        self.training_args = Seq2SeqTrainingArguments(
-            output_dir=model.pretrained_model_name_or_path + "_"+scenario.value,
-            **training_args
-        )
+        if scenario == Scenario.QUANT_AWARE_TUNE:
+            training_args['evaluation_strategy'] = "no"
+            print("evaluation strategy not supported for QAT, yet...")
+            self.training_args = QatTrainingArgs(
+                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                **training_args
+            )
+        else:
+            self.training_args = Seq2SeqTrainingArguments(
+                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                **training_args
+            )
 
         data_collator = DataCollatorForSeq2Seq(
             self.tokenizer, model=self.model)
@@ -76,18 +86,33 @@ class Pipeline():
                 tokenizer=self.tokenizer,
                 max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
 
+        # if training_args['predict_with_generate'] == True:
+        #     compute_metrics =  self._compute_metrics_generate
+        # else:
+        #     compute_metrics = self._compute_metrics_predict
 
-
-        self.trainer = Seq2SeqTrainer(
-            self.model,
-            self.training_args,
-            train_dataset=dataset_train['train'] if dataset_train is not None else None,
-            eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
-            data_collator=data_collator,
-            tokenizer=self.tokenizer,
-            compute_metrics=self._compute_metrics,
-
-        )
+        if scenario == Scenario.QUANT_AWARE_TUNE:
+            self.trainer = QatTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset_train['train'] if dataset_train is not None else None,
+                eval_dataset=None,
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=None,
+                callbacks=callbacks
+            )
+        else:
+            self.trainer = Seq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset_train['train'] if dataset_train is not None else None,
+                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
         print(
             f"Pipeline with {model.pretrained_model_name_or_path} ready to run!")
 
@@ -97,10 +122,17 @@ class Pipeline():
                 f"Scenario '{self.scenario}' is not instance of Scenario")
 
         scenario = self.scenario
-        print(f"Pipelin running with {scenario}...")
-        if scenario == Scenario.EVAL:
-            self.trainer.evaluate()
+        print(f"Pipeline running with {scenario}...")
 
+        if scenario == Scenario.EVAL:
+            print(self.trainer.evaluate())
+
+        elif scenario == Scenario.QUANT_AWARE_TUNE:
+
+            resume = False if self.training_args.resume_from_checkpoint is None \
+                else self.training_args.resume_from_checkpoint
+
+            print(self.trainer.train(resume_from_checkpoint=resume))
         else:
             raise NotImplementedError()
 
@@ -117,7 +149,37 @@ class Pipeline():
         preds, labels = eval_preds
         if isinstance(preds, tuple):
             preds = preds[0]
-    #     print(preds[0])
+        if self.training_args.predict_with_generate == False:
+            preds = np.argmax(preds, -1)
+        decoded_preds = self.tokenizer.batch_decode(
+            preds, skip_special_tokens=True)
+
+        # Replace -100 in the labels as we can't decode them.
+        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
+        decoded_labels = self.tokenizer.batch_decode(
+            labels, skip_special_tokens=True)
+
+        # Some simple post-processing
+        decoded_preds, decoded_labels = Pipeline._postprocess_text(
+            decoded_preds, decoded_labels)
+
+        result = self.metric.compute(predictions=decoded_preds,
+                                     references=decoded_labels)
+        result = {"bleu": result["score"]}
+
+        prediction_lens = [np.count_nonzero(
+            pred != self.tokenizer.pad_token_id) for pred in preds]
+        result["gen_len"] = np.mean(prediction_lens)
+        result = {k: round(v, 4) for k, v in result.items()}
+        return result
+
+    def _compute_metrics_predict(self, eval_preds):
+        preds, labels = eval_preds
+        if isinstance(preds, tuple):
+            preds = preds[0]
+        #     print(preds[0])
+        #     preds = torch.argmax(preds, -1)
+
         decoded_preds = self.tokenizer.batch_decode(
             preds, skip_special_tokens=True)
 
