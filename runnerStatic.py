@@ -40,7 +40,7 @@ print('Post Training Quantization Prepare: Inserting Observers')
 # calibrate = EuroParl(test_size=0.005,seed=1)
 calibrate = EuroParl(test_size=0.00005,seed=42)
 training_args = {'evaluation_strategy': 'epoch', 'learning_rate': 0.00002, 'per_device_train_batch_size': 4, 'per_device_eval_batch_size': 4,
-                 'weight_decay': 0.01, 'save_total_limit': 3, 'num_train_epochs': 1, 'predict_with_generate': True, 'no_cuda': False, 'fp16': False, 'push_to_hub': False}
+                 'weight_decay': 0.01, 'save_total_limit': 3, 'num_train_epochs': 1, 'predict_with_generate': True, 'no_cuda': True, 'fp16': False, 'push_to_hub': False}
 pipe = Pipeline(Scenario.EVAL, model=model, dataset_eval=calibrate,
                 training_args=training_args)
 pipe.run()
@@ -73,7 +73,7 @@ pipeEval.run()
 translated = model.model.generate(**model.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt", padding=True))
 print([model.tokenizer.decode(t, skip_special_tokens=True) for t in translated])
 #
-saved_model_dir = "./saved_models/"
-scripted_quantized_model_file = "mariannmt-en-sk-static-v2-euparl.pth"
-# torch.jit.save(torch.jit.script(model.model), saved_model_dir + scripted_quantized_model_file)
-torch.save(model.model.state_dict(),saved_model_dir+scripted_quantized_model_file)
+# saved_model_dir = "./saved_models/"
+# scripted_quantized_model_file = "mariannmt-en-sk-static-v2-euparl.pth"
+# # torch.jit.save(torch.jit.script(model.model), saved_model_dir + scripted_quantized_model_file)
+# torch.save(model.model.state_dict(),saved_model_dir+scripted_quantized_model_file)

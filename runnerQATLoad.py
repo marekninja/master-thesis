@@ -42,7 +42,8 @@ print('Post Training Quantization Prepare: Inserting Observers')
 # model.model.load_state_dict(torch.load(saved_model_dir+scripted_quantized_model_file))
 # print("Size of model after load",model.getSize())
 
-train = EuroParl(test_size=0.6,seed=42)
+# train = EuroParl(test_size=0.6,seed=42)
+train = EuroParl(test_size=0.9999,seed=42)
 # train = EuroParl(test_size=0.99995,seed=42)
 
 
@@ -66,7 +67,8 @@ print("QAT: done")
 
 model.model.to('cpu')
 
-eval = EuroParl(test_size=0.01,seed=42)
+# eval = EuroParl(test_size=0.01,seed=42)
+eval = EuroParl(test_size=0.00001,seed=42)
 # Convert to quantized model
 torch.quantization.convert(model.model, inplace=True)
 print('Convert done. Running eval...')
@@ -76,10 +78,10 @@ model.model.eval()
 tokenized = model.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt", padding=True)
 translated = model.model.generate(**model.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt", padding=True))
 print([model.tokenizer.decode(t, skip_special_tokens=True) for t in translated])
-
-saved_model_dir = "./saved_models/"
-scripted_quantized_model_file = "mariannmt-en-sk-QAT-quant-v2-03-euparl-0.4.pth"
-torch.save(model.model.state_dict(),saved_model_dir+scripted_quantized_model_file)
+#
+# saved_model_dir = "./saved_models/"
+# scripted_quantized_model_file = "mariannmt-en-sk-QAT-quant-v2-03-euparl-0.4.pth"
+# torch.save(model.model.state_dict(),saved_model_dir+scripted_quantized_model_file)
 
 
 training_argsEval = {'evaluation_strategy': 'epoch', 'learning_rate': 0.00002, 'per_device_train_batch_size': 4,
