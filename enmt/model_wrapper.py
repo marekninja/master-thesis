@@ -31,37 +31,145 @@ class ModelWrapper():
             self.tokenizer = AutoTokenizer.from_pretrained(
                 pretrained_model_name_or_path)
             self.isQuantized = False
+            self.isPrepared = False
             print(
                 f"Created model {pretrained_model_name_or_path} succesfully!")
+            print(f"Size of model: {self.getSize()}")
         else:
             self.pretrained_model_name_or_path = None,
             self.model = model
             self.tokenizer = tokenizer
             self.isQuantized = isQuantized
 
-    def quantizeDynamic(self):
-        """Quantizes self.model.
+
+
+    def quantizeDynamic(self, test_tr = True):
+        """
+        Quantizes self.model.
 
         Args:
-            mode (QuantizationMode): Mode to use for quantization
+            test_tr: whether to test model translation before and after quantization
+
+        Returns:
+            in-place
+
         """
-        self.model = _dynamic_quant(self.model)
+        if test_tr:
+            _test_translation(self)
+
+        self.model = torch.quantization.quantize_dynamic(
+                self.model, {torch.nn.Linear}, dtype=torch.qint8, inplace=False
+            )
         self.isQuantized = True
+
+        if test_tr:
+            _test_translation(self)
+        print("Size of model after quantization", self.getSize())
         print(
             f"Dynamic quantization of '{self.pretrained_model_name_or_path}' successful!")
 
-    def quantizeStaticStart(self):
-        """Quantizes self.model.
+    def quantizeStaticStart(self, q_backend='fbgemm', test_tr = True):
+        """
+        Prepares model for Static quantization
+        Args:
+            q_backend: backend for quantization
+            test_tr: whether to test model translation before quantization
+
+        Returns:
+            in-place
+        """
+        if test_tr:
+            _test_translation(self)
+
+        # _static_quant_start(self,q_backend) #inplace
+        print(
+            f"Using '{q_backend}' engine for quantization")
+
+        # self.model.eval()
+        # self.model.to('cpu')
+
+        # Fuse Conv, bn and relu
+        # model_wrapped.model.fuse_model()
+
+        # Specify quantization configuration
+        # Start with simple min/max range estimation and per-tensor quantization of weights
+        self.model.qconfig = torch.quantization.get_default_qconfig(q_backend)
+        print(self.model.qconfig)
+        torch.quantization.prepare(self.model, inplace=True)
+
+        self.isPrepared = True
+        print(
+            f"Prepared for STATIC quantization of '{self.pretrained_model_name_or_path}'..."
+            f"Calibration needed...")
+
+    def quantizeStaticConvert(self, test_tr= True):
+        """
+        Finishes Static quantization
+        Should be run after Calibration
 
         Args:
-            mode (QuantizationMode): Mode to use for quantization
+            test_tr: whether to test model translation after quantization
+
+        Returns:
+            in-place
         """
-        _static_quant_start(self)
-        self.model = _dynamic_quant(self.model)
+        # _static_quant_convert(self)
+        # Convert to quantized model
+        # self.model.to('cpu')
+        # self.model.eval()
+        torch.quantization.convert(self.model, inplace=True)
+
         self.isQuantized = True
-        print(
-            f"Started STATIC quantization of '{self.pretrained_model_name_or_path}'..."
-            f"Calibration needed...")
+        if test_tr:
+            _test_translation(self)
+        print('Post Training Quantization: Convert done')
+        print("Size of model after quantization", self.getSize())
+
+    def quantizeQATStart(self, q_backend='fbgemm', test_tr= True):
+        """
+        Preparation of model for QAT
+
+        Args:
+            q_backend: backend for quantization
+            test_tr: whether to test model translation before quantization
+        Returns:
+            in-place
+        """
+        if test_tr:
+            _test_translation(self)
+        self.model.to('cuda')
+        # Specify quantization configuration
+        # Start with simple min/max range estimation and per-tensor quantization of weights
+        self.model.qconfig = torch.quantization.get_default_qat_qconfig(q_backend)
+        print(self.model.qconfig)
+
+        torch.quantization.prepare_qat(self.model, inplace=True)
+        self.isPrepared = True
+        # _qat_prepare(self,q_backend)
+        print("Model prepared for QAT. Proceed with training/fine-tuning...")
+
+    def quantizeQATConvert(self, test_tr= True):
+        """
+        Converts QAT model to INT8
+        Args:
+            test_tr: whether to test model translation after quantization
+
+        Returns:
+            in-place
+        """
+        # _qat_convert(self)
+        self.model.to('cpu')
+        # Convert to quantized model
+        torch.quantization.convert(self.model, inplace=True)
+        self.model.eval()
+
+        print("Size of model after quantization", self.getSize())
+
+        if test_tr:
+            _test_translation(self)
+
+        print('Convert done. Can run eval...')
+
 
 
     def _get_quantized(self, mode: QuantizationMode):
@@ -106,48 +214,55 @@ def _makeQuantized(model_wrapped: ModelWrapper, mode: QuantizationMode) -> Model
             f"Quantization mode: {mode} not supportted yet.")
 
 
+def _test_translation(model_wrapped: ModelWrapper):
+    # model_wrapped.model.to("cpu")
+    # model_wrapped.model.eval()
+    tok = model_wrapped.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt",
+                          padding=True)
+    translated = model_wrapped.model.generate(**tok)
+    print("Example translation:",[model_wrapped.tokenizer.decode(t, skip_special_tokens=True) for t in translated])
+
 def _dynamic_quant(model_wrapped: ModelWrapper):
     print(
         f"Using '{get_quant_backend()}' engine for quantization")
     model_wrapped.model.to('cpu')
     quantized_model = torch.quantization.quantize_dynamic(
-        model_wrapped.model, {torch.nn.Linear}, dtype=torch.qint8
-    )
+                model_wrapped.model, {torch.nn.Linear}, dtype=torch.qint8, inplace=False
+            )
     return quantized_model
 
-def _static_quant_start(model_wrapped: ModelWrapper):
-    print(
-        f"Using '{get_quant_backend()}' engine for quantization")
-    model_wrapped.model.to('cpu')
-    model_wrapped.model.eval()
-
-    # Fuse Conv, bn and relu
-    model_wrapped.model.fuse_model()
-
-    num_calibration_batches = 32
-
-    # Specify quantization configuration
-    # Start with simple min/max range estimation and per-tensor quantization of weights
-    model_wrapped.model.qconfig = torch.quantization.default_qconfig
-    print(model_wrapped.model.qconfig)
-    torch.quantization.prepare(model_wrapped.model, inplace=True)
-
-    # Calibrate first
-    print('Post Training Quantization Prepare: Inserting Observers')
-    print('\n Inverted Residual Block:After observer insertion \n\n', model_wrapped.model.features[1].conv)
-
-    # Calibrate with the training set
-    evaluate(model_wrapped.model, criterion, data_loader, neval_batches=num_calibration_batches)
-    print('Post Training Quantization: Calibration done')
-
-    # Convert to quantized model
-    torch.quantization.convert(model_wrapped.model, inplace=True)
-    print('Post Training Quantization: Convert done')
-    print('\n Inverted Residual Block: After fusion and quantization, note fused modules: \n\n',
-          model_wrapped.model.features[1].conv)
-
-    print("Size of model after quantization")
-    print_size_of_model(model_wrapped.model)
-
-    top1, top5 = evaluate(model_wrapped.model, criterion, data_loader_test, neval_batches=num_eval_batches)
-    print('Evaluation accuracy on %d images, %2.2f' % (num_eval_batches * eval_batch_size, top1.avg))
+# def _static_quant_start(model_wrapped: ModelWrapper,q_backend: str):
+#     print(
+#         f"Using '{q_backend}' engine for quantization")
+#     model_wrapped.model.to('cpu')
+#     model_wrapped.model.eval()
+#
+#     # Fuse Conv, bn and relu
+#     # model_wrapped.model.fuse_model()
+#
+#     # Specify quantization configuration
+#     # Start with simple min/max range estimation and per-tensor quantization of weights
+#     model_wrapped.model.qconfig = torch.quantization.get_default_qconfig(q_backend)
+#     print(model_wrapped.model.qconfig)
+#     torch.quantization.prepare(model_wrapped.model, inplace=True)
+#
+# def _static_quant_convert(model_wrapped: ModelWrapper):
+#     # Convert to quantized model
+#     model_wrapped.model.to('cpu')
+#     torch.quantization.convert(model_wrapped.model, inplace=True)
+#
+# def _qat_prepare(model_wrapped: ModelWrapper,q_backend: str):
+#
+#     model_wrapped.model.to('cuda')
+#     # Specify quantization configuration
+#     # Start with simple min/max range estimation and per-tensor quantization of weights
+#     model_wrapped.model.qconfig = torch.quantization.get_default_qat_qconfig(q_backend)
+#     print(model_wrapped.model.qconfig)
+#
+#     torch.quantization.prepare_qat(model_wrapped.model, inplace=True)
+#
+# def _qat_convert(model_wrapped: ModelWrapper):
+#     model_wrapped.model.to('cpu')
+#     # Convert to quantized model
+#     torch.quantization.convert(model_wrapped.model, inplace=True)
+#     model_wrapped.model.eval()
