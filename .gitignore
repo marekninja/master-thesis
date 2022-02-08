@@ -143,3 +143,4 @@ dmypy.json
 Training-Helsinki-NLP
 Helsinki-NLP
 /transformers/
+saved_models/*.pth
