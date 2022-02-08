@@ -11,7 +11,7 @@ from copy import deepcopy
 """
 Running on LINUX
 
-nvidia-smi  -L
+nvidia-smi -L
     lists available cuda devices on system
     use the number (might be different indexing)
 
