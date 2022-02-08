@@ -8,6 +8,8 @@ from enmt.model_wrapper import ModelWrapper
 from enmt.results import Pipeline, Scenario
 from copy import deepcopy
 
+
+
 """
 Running on LINUX
 
@@ -16,6 +18,15 @@ nvidia-smi -L
     use the number (might be different indexing)
 
 CUDA_VISIBLE_DEVICES=5 python runnerAll.py 
+
+Profiling:
+
+import torch
+from torch.profiler import profile, record_function, ProfilerActivity
+
+with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+    with record_function("model_inference"):
+        pipeEval.run()
 
 """
 
