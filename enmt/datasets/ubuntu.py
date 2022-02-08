@@ -9,4 +9,4 @@ class Ubuntu(Dataset):
 
     def load(self, dataset_name="opus_ubuntu", lang1="en", lang2="sk"):
         return load_dataset(
-            dataset_name, lang1, lang2)
+            dataset_name, lang1=lang1, lang2=lang2)

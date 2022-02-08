@@ -17,6 +17,12 @@ Vystup prace by mal byt:
 
 ## Notes
 
+Does not work *as is* yet...
+
+Directory enmt/modified_transformers_files should not be used when running. 
+It is only storage for modified files of editable transformers installation.
+
+
 ## Evaluation of pretrained model 
 [Jupyter notebook](examples/train_and_eval/eval_pretrained.ipynb)
 
