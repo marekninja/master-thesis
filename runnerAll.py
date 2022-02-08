@@ -8,6 +8,17 @@ from enmt.model_wrapper import ModelWrapper
 from enmt.results import Pipeline, Scenario
 from copy import deepcopy
 
+"""
+Running on LINUX
+
+nvidia-smi  -L
+    lists available cuda devices on system
+    use the number (might be different indexing)
+
+CUDA_VISIBLE_DEVICES=5 python runnerAll.py 
+
+"""
+
 modelFP = ModelWrapper(
     pretrained_model_name_or_path="Helsinki-NLP/opus-mt-en-sk")
 # modelDQ = deepcopy(modelFP)
