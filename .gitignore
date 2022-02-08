@@ -136,8 +136,10 @@ dmypy.json
 **/MRPC/pytorch_model.bin
 **/MRPC/quantized/pytorch_model.bin
 
-**/datasets/**
-!enmt/datasets/*.py
+#**/datasets/**
+#!enmt/datasets/*
+
 
 Training-Helsinki-NLP
 Helsinki-NLP
+/transformers/
