@@ -28,7 +28,7 @@ class Scenario(Enum):
 
     """
     EVAL = "evaluate"
-    # TRAIN_EVAL = "TRAIN_EVAL"
+    TRAIN = "TRAIN_EVAL"
     QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE" # QAT uses modified training loop
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
@@ -127,7 +127,7 @@ class Pipeline():
         if scenario == Scenario.EVAL:
             print(self.trainer.evaluate())
 
-        elif scenario == Scenario.QUANT_AWARE_TUNE:
+        elif scenario == Scenario.QUANT_AWARE_TUNE or scenario == Scenario.TRAIN:
 
             resume = False if self.training_args.resume_from_checkpoint is None \
                 else self.training_args.resume_from_checkpoint
