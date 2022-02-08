@@ -75,7 +75,7 @@ class Dataset():
         #
         # self.sets = sets
 
-    def preprocess(self, tokenizer, max_input_length, max_target_length, prefix):
+    def preprocess(self, tokenizer, max_input_length=512, max_target_length=512, prefix=""):
 
 
 

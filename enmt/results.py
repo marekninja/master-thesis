@@ -1,7 +1,7 @@
 import comet_ml
 
 from enum import Enum
-from transformers import Seq2SeqTrainer
+from transformers import Seq2SeqTrainer, TrainerCallback, Trainer, TrainingArguments, TrainerState, TrainerControl
 from transformers import Seq2SeqTrainingArguments
 from transformers.integrations import CometCallback
 
@@ -9,7 +9,7 @@ from .qat_trainer import QatTrainingArgs, QatTrainer
 from .dataset import Dataset
 from datasets import load_metric
 
-from typing import List
+from typing import List, Optional
 
 from transformers.data.data_collator import DataCollatorForSeq2Seq
 from enmt.model_wrapper import ModelWrapper
@@ -22,15 +22,15 @@ class Scenario(Enum):
 
     Args:
         Enum (EVAL): Evaluate provided model
-        Enum (TRAIN_EVAL): Train provided model and evaluate
+        #  Enum (TRAIN_EVAL): Train provided model and evaluate
         Enum (QUANT_AWARE_TUNE_EVAL): Quantization-Aware fine-tuning of provided model and evaluation
-        Enum (QUANT_AWARE_TRAIN_EVAL): Quantization-Aware training from scratch of provided model and evaluation
+        # Enum (QUANT_AWARE_TRAIN_EVAL): Quantization-Aware training from scratch of provided model and evaluation
 
     """
     EVAL = "evaluate"
-    TRAIN_EVAL = "TRAIN_EVAL"
-    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"
-    QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
+    # TRAIN_EVAL = "TRAIN_EVAL"
+    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE" # QAT uses modified training loop
+    # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
 class Pipeline():
@@ -49,7 +49,7 @@ class Pipeline():
                                 'predict_with_generate': True,
                                 'no_cuda': True,
                                 'fp16': False,
-                                'push_to_hub': False}, callbacks=None):
+                                'push_to_hub': False}, callbacks: Optional[List[TrainerCallback]] = None):
 
         # model_name = model_checkpoint.split("/")[-1]
         self.model = model.model
@@ -59,8 +59,8 @@ class Pipeline():
         self.scenario = scenario
 
         if scenario == Scenario.QUANT_AWARE_TUNE:
-            training_args['evaluation_strategy'] = "no"
-            print("evaluation strategy not supported for QAT, yet...")
+            # training_args['evaluation_strategy'] = "no"
+            # print("evaluation strategy not supported for QAT, yet...")
             self.training_args = QatTrainingArgs(
                 output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
                 **training_args
@@ -74,17 +74,17 @@ class Pipeline():
         data_collator = DataCollatorForSeq2Seq(
             self.tokenizer, model=self.model)
 
-        config = self.model.config.to_dict()
+        self.config = self.model.config.to_dict()
 
         if dataset_eval is not None:
             dataset_eval.preprocess(
                 tokenizer=self.tokenizer,
-                max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
+                max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
         if dataset_train is not None:
             dataset_train.preprocess(
                 tokenizer=self.tokenizer,
-                max_input_length=config['max_length'], max_target_length=config['max_length'], prefix="")
+                max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
         # if training_args['predict_with_generate'] == True:
         #     compute_metrics =  self._compute_metrics_generate
@@ -96,10 +96,10 @@ class Pipeline():
                 self.model,
                 self.training_args,
                 train_dataset=dataset_train['train'] if dataset_train is not None else None,
-                eval_dataset=None,
+                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
-                compute_metrics=None,
+                compute_metrics=self._compute_metrics,
                 callbacks=callbacks
             )
         else:
@@ -206,3 +206,8 @@ class Pipeline():
 class Comparator():
     def __init__(self, results: List[Pipeline]) -> None:
         pass
+
+
+
+
+
