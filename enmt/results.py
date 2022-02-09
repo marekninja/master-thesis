@@ -29,7 +29,7 @@ class Scenario(Enum):
     """
     EVAL = "evaluate"
     TRAIN = "TRAIN_EVAL"
-    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE" # QAT uses modified training loop
+    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"  # QAT uses modified training loop
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
@@ -49,7 +49,9 @@ class Pipeline():
                                 'predict_with_generate': True,
                                 'no_cuda': True,
                                 'fp16': False,
-                                'push_to_hub': False}, callbacks: Optional[List[TrainerCallback]] = None):
+                                'push_to_hub': False},
+                 callbacks: Optional[List[TrainerCallback]] = None,
+                 metric_key_prefix: Optional[str] = "eval"):
 
         # model_name = model_checkpoint.split("/")[-1]
         self.model = model.model
@@ -100,7 +102,8 @@ class Pipeline():
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
-                callbacks=callbacks
+                callbacks=callbacks,
+                metric_key_prefix = metric_key_prefix
             )
         else:
             self.trainer = Seq2SeqTrainer(
@@ -111,7 +114,8 @@ class Pipeline():
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
-                callbacks=callbacks
+                callbacks=callbacks,
+                metric_key_prefix=metric_key_prefix
             )
         print(
             f"Pipeline with {model.pretrained_model_name_or_path} ready to run!")
@@ -206,8 +210,3 @@ class Pipeline():
 class Comparator():
     def __init__(self, results: List[Pipeline]) -> None:
         pass
-
-
-
-
-
