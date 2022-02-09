@@ -102,8 +102,7 @@ class Pipeline():
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
-                callbacks=callbacks,
-                metric_key_prefix = metric_key_prefix
+                callbacks=callbacks
             )
         else:
             self.trainer = Seq2SeqTrainer(
@@ -114,8 +113,7 @@ class Pipeline():
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
-                callbacks=callbacks,
-                metric_key_prefix=metric_key_prefix
+                callbacks=callbacks
             )
         print(
             f"Pipeline with {model.pretrained_model_name_or_path} ready to run!")

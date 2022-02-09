@@ -48,7 +48,7 @@ training_args = {'metric_for_best_model': "eval_bleu", 'greater_is_better': True
                      'disable_tqdm': True,
                      }
 pipe = Pipeline(Scenario.TRAIN, model=modelFP, dataset_train=train, dataset_eval=train,
-                    training_args=training_args, metric_key_prefix="open_subs_train-eval")
+                    training_args=training_args)
 
 euparl = EuroParl(test_size=0.2, seed=42)
 euparl.preprocess(tokenizer=pipe.tokenizer)
