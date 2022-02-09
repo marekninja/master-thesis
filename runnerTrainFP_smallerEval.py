@@ -35,26 +35,29 @@ modelFP = ModelWrapper(
 print("*** Training FP Marian model from scratch ***")
 modelFP.reset()
 
-train = OpenSubtitles(test_size=0.1, seed=42)
-# train = EuroParl(test_size=0.1, seed=42)
 
+test_size = 50000
 batch_size = 32
 grad_acc_steps = 2
 train_epochs = 8
+
+train = OpenSubtitles(test_size=int(test_size), seed=42)
+# train = EuroParl(test_size=0.1, seed=42)
+
 
 training_args = {'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                      "save_strategy": "steps",
                      'evaluation_strategy': 'steps', "save_steps": 2000, "eval_steps": 2000, 'logging_first_step': True,
                      'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'gradient_accumulation_steps': grad_acc_steps,
                      'per_device_eval_batch_size': batch_size, 'weight_decay': 0.01, 'save_total_limit': 3,
-                     'num_train_epochs': train_epochs, 'predict_with_generate': True, 'no_cuda': False,
+                     'num_train_epochs': train_epochs, 'predict_with_generate': True, 'generation_num_beams':1,'no_cuda': False,
                      'fp16': False, 'push_to_hub': False,
                      'disable_tqdm': True,
                      }
 pipe = Pipeline(Scenario.TRAIN, model=modelFP, dataset_train=train, dataset_eval=train,
                     training_args=training_args)
 
-euparl = EuroParl(test_size=0.2, seed=42)
+euparl = EuroParl(test_size=int(test_size), seed=42)
 euparl.preprocess(tokenizer=pipe.tokenizer)
 
 callback1 = RobustCallback(pipe.trainer, euparl['test'], "euro_parl_eval")

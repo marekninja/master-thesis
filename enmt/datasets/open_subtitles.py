@@ -24,7 +24,7 @@ class OpenSubtitles(Dataset):
             sets['test'] = dataset['train']
             del dataset['train']
         elif self.test_size > 0.0:
-            new = dataset['train'].train_test_split(test_size=float(self.test_size), seed=self.seed)
+            new = dataset['train'].train_test_split(test_size=self.test_size, seed=self.seed)
             sets['train'] = new['train']
             sets['test'] = new['test']
 

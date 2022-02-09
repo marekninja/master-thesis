@@ -5,7 +5,7 @@ from transformers import Seq2SeqTrainer, TrainerCallback, Trainer, TrainingArgum
 from transformers import Seq2SeqTrainingArguments
 from transformers.integrations import CometCallback
 
-from .qat_trainer import QatTrainingArgs, QatTrainer
+from .qat_trainer import QatTrainingArgs, QatTrainer, LogSeq2SeqTrainer
 from .dataset import Dataset
 from datasets import load_metric
 
@@ -105,7 +105,7 @@ class Pipeline():
                 callbacks=callbacks
             )
         else:
-            self.trainer = Seq2SeqTrainer(
+            self.trainer = LogSeq2SeqTrainer(
                 self.model,
                 self.training_args,
                 train_dataset=dataset_train['train'] if dataset_train is not None else None,

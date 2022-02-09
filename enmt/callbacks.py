@@ -5,7 +5,7 @@ from enmt import QatTrainer
 
 
 class RobustCallback(TrainerCallback):
-    def __init__(self, trainer: QatTrainer, other_dataset: Dataset, metric_key_prefix: str = "custom_eval"):
+    def __init__(self, trainer: QatTrainer, other_dataset: Dataset, metric_key_prefix: str = "custom_eval", num_beams: int = 1):
         """
         Callback to achieve evaluation on more datasets to help evaluate model robustness during training
         Additional parameters added to TrainerCallback
@@ -25,7 +25,8 @@ class RobustCallback(TrainerCallback):
         self.trainer = trainer
         self.other_dataset = other_dataset
         self.metric_key_prefix = metric_key_prefix
+        self.num_beams = num_beams
 
     def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         # print("Eval callback:",self.metric_key_prefix)
-        self.trainer.custom_evaluate(self.other_dataset, metric_key_prefix=self.metric_key_prefix)
+        self.trainer.custom_evaluate(self.other_dataset, metric_key_prefix=self.metric_key_prefix, num_beams=self.num_beams)
