@@ -186,6 +186,14 @@ class ModelWrapper():
     def reset(self):
         """Resets the model. Model can be trained from scratch.
         """
+
+        # def reinit_model_weights(m: torch.nn.Module):
+        #     if hasattr(m, "children"):
+        #         for m_child in m.children():
+        #             if hasattr(m_child, "reset_parameters"):
+        #                 m_child.reset_parameters()
+        #             reinit_model_weights(m_child)
+
         config = self.model.config
         model_type = type(self.model)
         self.model = model_type(config)
