@@ -35,7 +35,8 @@ modelFP = ModelWrapper(
 print("*** Training FP Marian model from scratch ***")
 modelFP.reset()
 
-train = EuroParl(test_size=0.1, seed=42)
+train = OpenSubtitles(test_size=0.1, seed=42)
+# train = EuroParl(test_size=0.1, seed=42)
 
 training_args = {'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                      "save_strategy": "steps",
@@ -47,12 +48,12 @@ training_args = {'metric_for_best_model': "eval_bleu", 'greater_is_better': True
                      'disable_tqdm': True,
                      }
 pipe = Pipeline(Scenario.TRAIN, model=modelFP, dataset_train=train, dataset_eval=train,
-                    training_args=training_args)
+                    training_args=training_args, metric_key_prefix="open_subs_train-eval")
 
-subs = OpenSubtitles(test_size=0.1, seed=42)
-subs.preprocess(tokenizer=pipe.tokenizer)
+euparl = EuroParl(test_size=0.2, seed=42)
+euparl.preprocess(tokenizer=pipe.tokenizer)
 
-callback1 = RobustCallback(pipe.trainer, subs['test'], "open_subs_eval")
+callback1 = RobustCallback(pipe.trainer, euparl['test'], "euro_parl_eval")
 # callback2 = RobustCallback(pipeEval.trainer,eval['test'],"bleu_euparl")
 callback3 = EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0)
 
