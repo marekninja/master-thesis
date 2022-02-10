@@ -36,18 +36,18 @@ print("*** Training FP Marian model from scratch ***")
 modelFP.reset()
 
 
-# test_size = 40000
-# valid_size = 40000
-# batch_size = 32
-# eval_batch_size = 2 * batch_size
-# grad_acc_steps = 2
-# train_epochs = 8
-test_size = 0.9999
-valid_size = 50
-batch_size = 2
+test_size = 40000
+valid_size = 40000
+batch_size = 32
 eval_batch_size = 2 * batch_size
-grad_acc_steps = 1
-train_epochs = 1
+grad_acc_steps = 2
+train_epochs = 8
+# test_size = 0.9999
+# valid_size = 50
+# batch_size = 2
+# eval_batch_size = 2 * batch_size
+# grad_acc_steps = 1
+# train_epochs = 1
 
 train = OpenSubtitles(test_size=test_size,valid_size=valid_size, seed=42)
 # train = EuroParl(test_size=0.1, seed=42)
@@ -55,8 +55,8 @@ train = OpenSubtitles(test_size=test_size,valid_size=valid_size, seed=42)
 
 training_args = {'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                      "save_strategy": "steps",
-                     # 'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
-                     'evaluation_strategy': 'steps', "save_steps": 200, "eval_steps": 200, 'logging_first_step': True,
+                     'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
+                     # 'evaluation_strategy': 'steps', "save_steps": 200, "eval_steps": 200, 'logging_first_step': True,
                      'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'gradient_accumulation_steps': grad_acc_steps,
                      'per_device_eval_batch_size': eval_batch_size, 'weight_decay': 0.01, 'save_total_limit': 3,
                      'num_train_epochs': train_epochs, 'predict_with_generate': True, 'generation_num_beams':1,'no_cuda': False,
