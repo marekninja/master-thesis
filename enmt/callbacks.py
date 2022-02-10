@@ -12,8 +12,9 @@ class RobustCallback(TrainerCallback):
 
         Should be used with TrainingArguments:
             evaluation_strategy: "steps": Evaluation is done (and logged) every eval_steps
-            eval_steps (int, optional) — Number of update steps between two evaluations if evaluation_strategy="steps". Will default to the same value as logging_steps if not set.
-            logging_steps (int, optional, defaults to 500) — Number of update steps between two logs if logging_strategy="steps"
+            eval_steps (int, optional) — Number of update steps between two evaluations if evaluation_strategy="steps".
+                Will default to the same value as logging_steps if not set.
+                logging_steps (int, optional, defaults to 500) — Number of update steps between two logs if logging_strategy="steps"
 
 
         Args:
