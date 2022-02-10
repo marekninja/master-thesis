@@ -37,8 +37,7 @@ class Pipeline():
     """Pipeline class, implementing scenarios
     """
 
-    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset_train: Dataset = None,
-                 dataset_eval: Dataset = None,
+    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset: Dataset = None,
                  training_args={'evaluation_strategy': 'epoch',
                                 'learning_rate': 2e-5,
                                 'per_device_train_batch_size': 4,
@@ -78,27 +77,44 @@ class Pipeline():
 
         self.config = self.model.config.to_dict()
 
-        if dataset_eval is not None:
-            dataset_eval.preprocess(
+        if dataset is not None:
+            dataset.preprocess(
                 tokenizer=self.tokenizer,
                 max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
-        if dataset_train is not None:
-            dataset_train.preprocess(
-                tokenizer=self.tokenizer,
-                max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
+        # if dataset is not None:
+        #     dataset.preprocess(
+        #         tokenizer=self.tokenizer,
+        #         max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
         # if training_args['predict_with_generate'] == True:
         #     compute_metrics =  self._compute_metrics_generate
         # else:
         #     compute_metrics = self._compute_metrics_predict
 
+        if scenario == Scenario.QUANT_AWARE_TUNE or scenario.TRAIN:
+            if "train" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'train' split")
+            if "val" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'val' split")
+
         if scenario == Scenario.QUANT_AWARE_TUNE:
             self.trainer = QatTrainer(
                 self.model,
                 self.training_args,
-                train_dataset=dataset_train['train'] if dataset_train is not None else None,
-                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
+        elif scenario == Scenario.TRAIN:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
@@ -108,8 +124,8 @@ class Pipeline():
             self.trainer = LogSeq2SeqTrainer(
                 self.model,
                 self.training_args,
-                train_dataset=dataset_train['train'] if dataset_train is not None else None,
-                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['test'],
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,

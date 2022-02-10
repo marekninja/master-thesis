@@ -106,7 +106,7 @@ training_argsEval = {'evaluation_strategy': 'steps', 'eval_steps': 200, 'logging
                      'disable_tqdm': True,
                      }
 
-pipeEval = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset_train=train, dataset_eval=eval,
+pipeEval = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset=train, dataset_eval=eval,
                     training_args=training_argsEval)
 subs = OpenSubtitles(test_size=0.00005, seed=42)
 subs.preprocess(tokenizer=pipeEval.tokenizer)
