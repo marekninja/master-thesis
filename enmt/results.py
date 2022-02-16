@@ -15,6 +15,8 @@ from transformers.data.data_collator import DataCollatorForSeq2Seq
 from enmt.model_wrapper import ModelWrapper
 import numpy as np
 import torch
+import uuid
+import os
 
 
 class Scenario(Enum):
@@ -22,12 +24,12 @@ class Scenario(Enum):
 
     Args:
         Enum (EVAL): Evaluate provided model
-        #  Enum (TRAIN_EVAL): Train provided model and evaluate
+        Enum (TRAIN): Train provided model
         Enum (QUANT_AWARE_TUNE_EVAL): Quantization-Aware fine-tuning of provided model and evaluation
         # Enum (QUANT_AWARE_TRAIN_EVAL): Quantization-Aware training from scratch of provided model and evaluation
 
     """
-    EVAL = "evaluate"
+    EVAL = "EVALUATE"
     TRAIN = "TRAIN_EVAL"
     QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"  # QAT uses modified training loop
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
@@ -59,16 +61,41 @@ class Pipeline():
         self.metric = load_metric("sacrebleu")
         self.scenario = scenario
 
+        def name(x: str = "pipeline"): return x + "_" + uuid.uuid4().hex + "_" + self.scenario.value
+
+        if 'output_dir' not in training_args.keys():
+            print("Pipeline: output_dir not specified. Generating unique...")
+            dir = ""
+            while True:
+                dir = name()
+                if not os.path.isdir(dir):
+                    break
+
+            training_args['output_dir'] = dir
+
+        else:
+            dir = training_args['output_dir']
+            while True:
+                if not os.path.isdir(dir):
+                    break
+                dir = name(training_args['output_dir'])
+
+            training_args['output_dir'] = dir
+
+
+
+        print("output_dir for Pipeline is: ", training_args['output_dir'])
+
         if scenario == Scenario.QUANT_AWARE_TUNE:
             # training_args['evaluation_strategy'] = "no"
             # print("evaluation strategy not supported for QAT, yet...")
             self.training_args = QatTrainingArgs(
-                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                # output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
                 **training_args
             )
         else:
             self.training_args = Seq2SeqTrainingArguments(
-                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                # output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
                 **training_args
             )
 
