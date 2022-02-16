@@ -52,7 +52,7 @@ train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 # train = EuroParl(test_size=0.1, seed=42)
 
 
-training_args = {'output_dir':"FP_marian_1",
+training_args = {'output_dir':"FP_marian_2",
                  'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                  "save_strategy": "steps",
                  # 'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
