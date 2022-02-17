@@ -1,7 +1,7 @@
 import comet_ml
 from transformers import EarlyStoppingCallback
 
-from enmt import RobustCallback, QuantizedEvalCallback, CometOneExperimentCallback, CometContinueExperimentCallback, \
+from enmt import RobustCallback, CometOneExperimentCallback, CometContinueExperimentCallback, \
     TestRobustCallback
 from enmt.datasets import EuroParl, OpenSubtitles
 
@@ -40,9 +40,11 @@ test_size = 40000
 valid_size = 40000
 batch_size = 32
 valid_batch_size = 2 * batch_size
-eval_batch_size = batch_size / 2
+eval_batch_size_gpu = 2 * batch_size
+eval_batch_size_cpu = batch_size // 2
 grad_acc_steps = 2
 train_epochs = 4
+warmup_steps = 10000
 bn_freeze = int(round(548180*0.5)) # 1/2 of all global steps
 qpar_freeze = int(round(548180*(2/3))) # 2/3 of all global steps
 
@@ -67,7 +69,7 @@ training_args = {'output_dir':"QAT_marian_1",
                  "save_strategy": "steps",
                  'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
                  # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
-                 'learning_rate': 2e-4, 'per_device_train_batch_size': batch_size, 'warmup_steps':10000,
+                 'learning_rate': 2e-4, 'per_device_train_batch_size': batch_size, 'warmup_steps':warmup_steps,
                  # 'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps':0,
                  'gradient_accumulation_steps': grad_acc_steps,
                  'per_device_eval_batch_size': valid_batch_size, 'weight_decay': 0.01, 'save_total_limit': 3,
@@ -84,7 +86,7 @@ pipe = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset=train,
 
 euparl = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 # euparl = EuroParl(test_size=40, valid_size=40, seed=42)
-# euparl.preprocess(tokenizer=pipe.tokenizer)
+euparl.preprocess(tokenizer=pipe.tokenizer)
 
 small_open = OpenSubtitles(test_size=40, valid_size=40, seed=42)
 # small_open.preprocess(tokenizer=pipe.tokenizer)
@@ -114,26 +116,6 @@ pipe.run()
 modelQAT.model.save_pretrained('./saved_models/trained/QAT_marian_1_marianmt_v2_en-sk_openSubs-euparl_model', push_to_hub=False)
 modelQAT.tokenizer.save_pretrained('./saved_models/trained/QAT_marian_1_marianmt_v2_en-sk_openSubs-euparl_tokenizer',
                                    push_to_hub=False)
-
-# train = OpenSubtitles(test_size=20, valid_size=valid_size, seed=42)
-# euparl = EuroParl(test_size=20, valid_size=valid_size, seed=42)
-#
-# training_argsEval = {'no_cuda': False, 'fp16': False, 'per_device_eval_batch_size': eval_batch_size_gpu,
-#                      'predict_with_generate': True,
-#                      "report_to": "none"
-#                      }
-# pipeEval = Pipeline(Scenario.EVAL, model=modelQAT, dataset=train,
-#                     training_args=training_argsEval, metric_key_prefix="test_cuda_OpenSubs")
-# print("BLEU in-domain (OpenSubs) on QAT cuda")
-# pipeEval.trainer.add_callback(CometContinueExperimentCallback())
-# pipeEval.run()
-#
-#
-# pipeEval = Pipeline(Scenario.EVAL, model=modelQAT, dataset=euparl,
-#                     training_args=training_argsEval, metric_key_prefix="test_cuda_EuroParl")
-# pipeEval.trainer.add_callback(CometContinueExperimentCallback())
-# print("BLEU out-of-domain (EuroParl) on QAT cuda")
-# pipeEval.run()
 
 train = OpenSubtitles(test_size=20, valid_size=valid_size, seed=42)
 euparl = EuroParl(test_size=20, valid_size=valid_size, seed=42)

@@ -75,53 +75,6 @@ class TestRobustCallback(TrainerCallback):
         self.trainer.custom_evaluate(self.other_dataset, metric_key_prefix=self.metric_key_prefix,
                                      num_beams=self.num_beams)
 
-
-class QuantizedEvalCallback(TrainerCallback):
-    def __init__(self, trainer: QatTrainer, other_dataset: Dataset, metric_key_prefix: str = "custom_quant_eval",
-                 num_beams: int = 1, on_eval: bool = False, eval_global_step_freq: int = 10000,on_epoch: bool = True):
-        """
-        Callback to achieve evaluation on more datasets to help evaluate model robustness during training
-        Additional parameters added to TrainerCallback
-
-        Should be used with TrainingArguments:
-            evaluation_strategy: "steps": Evaluation is done (and logged) every eval_steps
-            eval_steps (int, optional) — Number of update steps between two evaluations if evaluation_strategy="steps".
-                Will default to the same value as logging_steps if not set.
-                logging_steps (int, optional, defaults to 500) — Number of update steps between two logs if logging_strategy="steps"
-
-
-        Args:
-            trainer: QatTrainer used to train model
-            other_dataset: torch.utils.data.Dataset to evaluate on
-            metric_key_prefix: name of dataset/metric to be seen in logs
-        """
-        super().__init__()
-        self.on_eval = on_eval
-        self.eval_global_step_freq = eval_global_step_freq
-        self.on_epoch = on_epoch
-        self.trainer = trainer
-        self.other_dataset = other_dataset
-        self.metric_key_prefix = metric_key_prefix
-        self.num_beams = num_beams
-
-    def on_epoch_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        # print("Eval callback:",self.metric_key_prefix)
-
-        if self.on_epoch:
-            print("quantized callback: epoch")
-            metrics= self.trainer.quant_evaluate(self.other_dataset, metric_key_prefix=self.metric_key_prefix,
-                                    num_beams=self.num_beams)
-            print(self.metric_key_prefix, " : ", metrics)
-
-    def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        # print("Eval callback:",self.metric_key_prefix)
-
-        if self.on_eval and state.global_step % self.eval_global_step_freq == 0:
-            print("quantized callback: on eval")
-            metrics = self.trainer.quant_evaluate(self.other_dataset, metric_key_prefix=self.metric_key_prefix,
-                                        num_beams=self.num_beams)
-            print(self.metric_key_prefix, " : ", metrics)
-
 class CometOneExperimentCallback(CometCallback):
     """Disables end of experiment on end of training"""
 
