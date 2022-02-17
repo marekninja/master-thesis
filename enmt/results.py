@@ -1,5 +1,3 @@
-import comet_ml
-
 from enum import Enum
 from transformers import Seq2SeqTrainer, TrainerCallback, Trainer, TrainingArguments, TrainerState, TrainerControl
 from transformers import Seq2SeqTrainingArguments
@@ -52,9 +50,10 @@ class Pipeline():
                                 'fp16': False,
                                 'push_to_hub': False},
                  callbacks: Optional[List[TrainerCallback]] = None,
-                 metric_key_prefix: Optional[str] = "eval"):
+                 metric_key_prefix: str = "eval"):
 
         # model_name = model_checkpoint.split("/")[-1]
+        self.metric_key_prefix = metric_key_prefix
         self.model = model.model
         self.tokenizer = model.tokenizer
         self.modelWrapper = model
@@ -170,7 +169,7 @@ class Pipeline():
         print(f"Pipeline running with {scenario}...")
 
         if scenario == Scenario.EVAL:
-            print(self.trainer.evaluate())
+            print(self.trainer.evaluate(metric_key_prefix= self.metric_key_prefix))
 
         elif scenario == Scenario.QUANT_AWARE_TUNE or scenario == Scenario.TRAIN:
 
