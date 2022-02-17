@@ -3,5 +3,4 @@ from .results import Dataset, Pipeline, Scenario
 from .quant_helper import QuantizationMode
 from .dataset import Dataset
 from .qat_trainer import QatTrainer, QatTrainingArgs, LogSeq2SeqTrainer
-from .callbacks import RobustCallback, QuantizedEvalCallback, CometOneExperimentCallback, \
-    CometContinueExperimentCallback, TestRobustCallback
+from .callbacks import RobustCallback, CometOneExperimentCallback, CometContinueExperimentCallback, TestRobustCallback
