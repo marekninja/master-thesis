@@ -38,11 +38,11 @@ modelQAT.quantizeQATStart()
 
 test_size = 40000
 valid_size = 40000
-batch_size = 32
-valid_batch_size = 2 * batch_size
-eval_batch_size_gpu = 2 * batch_size
+batch_size = 16
+valid_batch_size = batch_size
+eval_batch_size_gpu = batch_size
 eval_batch_size_cpu = batch_size // 2
-grad_acc_steps = 2
+grad_acc_steps = 4
 train_epochs = 4
 warmup_steps = 10000
 bn_freeze = int(round(548180*0.5)) # 1/2 of all global steps
@@ -78,6 +78,7 @@ training_args = {'output_dir':"QAT_marian_1",
                  'no_cuda': False,
                  'fp16': False, 'push_to_hub': False,
                  'disable_tqdm': True,
+                 'resume_from_checkpoint':'',
                  'report_to':"none"
                  }
 
