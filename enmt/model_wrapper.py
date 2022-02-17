@@ -137,6 +137,8 @@ class ModelWrapper():
         """
         if test_tr:
             _test_translation(self)
+
+        self.model.train()
         self.model.to('cuda')
         # Specify quantization configuration
         # Start with simple min/max range estimation and per-tensor quantization of weights
