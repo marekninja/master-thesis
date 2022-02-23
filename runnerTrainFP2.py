@@ -117,8 +117,8 @@ validation.preprocess(tokenizer=pipe.tokenizer)
 
 callback1 = RobustCallback(pipe.trainer, validation['val'], "trainEuParlFP_OpenSubs_eval")
 
-callback2 = TestRobustCallback(pipe.trainer, validation['test'], "trainEuParlFP_EuParl_test_cuda")
-callback3 = TestRobustCallback(pipe.trainer, train['test'], "trainEuParlFP_OpenSubs_test_cuda")
+callback2 = TestRobustCallback(pipe.trainer, train['test'], "trainEuParlFP_EuParl_test_cuda")
+callback3 = TestRobustCallback(pipe.trainer, validation['test'], "trainEuParlFP_OpenSubs_test_cuda")
 # callback3 = TestRobustCallback(pipe.trainer, small_open['test'], "open_subs_cuda_test")
 
 # callback4 = EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0)
