@@ -93,7 +93,7 @@ train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 training_args = {'output_dir': "FP_marian_3",
                  'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                  "save_strategy": "steps",
-                 'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
+                 'evaluation_strategy': 'steps', "save_steps": 5000, "eval_steps": 5000, 'logging_first_step': True,
                  # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
                  'learning_rate': 2e-4, 'per_device_train_batch_size': batch_size, 'warmup_steps': warmup_steps,
                  # 'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps':0,
