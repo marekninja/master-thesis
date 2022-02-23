@@ -62,17 +62,17 @@ modelQAT.quantizeQATStart()
 
 test_size = 40000
 valid_size = 40000
-batch_size = 16
+batch_size = 4
 valid_batch_size = batch_size
 eval_batch_size_gpu = batch_size
 eval_batch_size_cpu = batch_size // 2
-grad_acc_steps = 4
+grad_acc_steps = 16
 train_epochs = 10
-warmup_steps = 10000
-max_steps = 5000000 # 5 million of update steps maximum
+warmup_steps = 4000
+max_steps = 1000000 # 5 million of update steps maximum
 save_total_limit = 10
-bn_freeze = int(round(5e6*(2/3))) # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
-qpar_freeze = int(round(5e6*0.5)) # 1/2 of all global steps
+bn_freeze = int(round(1e6*(2/3))) # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
+qpar_freeze = int(round(1e6*0.5)) # 1/2 of all global steps
 
 # test_size = 0.99995
 # test_size = 0.999
