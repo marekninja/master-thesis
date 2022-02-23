@@ -143,8 +143,8 @@ modelQAT.model.save_pretrained('./saved_models/trained/QAT_marian_INF1_marianmt_
 modelQAT.tokenizer.save_pretrained('./saved_models/trained/QAT_marian_INF1_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
                                    push_to_hub=False)
 
-train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
-validation = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
+train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
+validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 modelQAT.quantizeQATConvert()
 
 training_argsEval = {'no_cuda': True, 'fp16': False, 'per_device_eval_batch_size': eval_batch_size_cpu,
