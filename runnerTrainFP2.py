@@ -10,7 +10,7 @@ from enmt.results import Pipeline, Scenario
 from copy import deepcopy
 
 """
-Training QAT model from scratch for many steps...
+Training FP model from scratch for many steps...
     Goal is to wait for EXPOSURE BIAS
 
 Training dataset: Euro Parlament en-sk
@@ -101,7 +101,7 @@ training_args = {'output_dir': "FP_marian_INF1",
                  'per_device_eval_batch_size': valid_batch_size, 'weight_decay': 0.01, 'save_total_limit': save_total_limit,
                  'num_train_epochs': train_epochs, "max_steps": max_steps, 'predict_with_generate': True,
                  'generation_num_beams': 1,
-                 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
+                 # 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
                  'no_cuda': False,
                  'fp16': False, 'push_to_hub': False,
                  'disable_tqdm': True,
