@@ -70,7 +70,7 @@ grad_acc_steps = 16
 train_epochs = 10
 warmup_steps = 4000
 max_steps = 1000000 # 5 million of update steps maximum
-save_total_limit = 10
+save_total_limit = 3
 bn_freeze = int(round(1e6*(2/3))) # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round(1e6*0.5)) # 1/2 of all global steps
 
