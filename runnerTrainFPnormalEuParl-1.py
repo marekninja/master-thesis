@@ -68,7 +68,7 @@ eval_batch_size_cpu = batch_size // 2
 grad_acc_steps = 4
 train_epochs = 10 # overiden by max_steps
 warmup_steps = 4000
-max_steps = 250000# 250k update steps maximum, overides train_epochs...
+max_steps = 125000# 250k update steps maximum, overides train_epochs...
 save_total_limit = 50
 bn_freeze = int(
     round(250e3 * (2 / 3)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
