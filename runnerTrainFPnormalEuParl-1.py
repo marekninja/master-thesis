@@ -10,13 +10,13 @@ from enmt.results import Pipeline, Scenario
 from copy import deepcopy
 
 """
-Training FP model from scratch for many steps...
-    Goal is to wait for EXPOSURE BIAS
+Training FP model from scratch for reasonable amount of steps
+    Goal is to have trained model on EuroParl and use it for QAT finetuning
 
 Training dataset: Euro Parlament en-sk
 Evaluation Euro Parl, Open Subs
 
-Trained model: FP_marian_INF1_marianmt_v2_en-sk_openSubs-euparl_
+Trained model: FP_marian_3_marianmt_v2_en-sk_openSubs-euparl_
                     model and tokenizer
 
 metric_key_prefix format:
@@ -61,18 +61,18 @@ modelQAT.reset()
 
 test_size = 40000
 valid_size = 40000
-batch_size = 4
+batch_size = 16
 valid_batch_size = batch_size
 eval_batch_size_gpu = batch_size
 eval_batch_size_cpu = batch_size // 2
-grad_acc_steps = 16
-train_epochs = 10
+grad_acc_steps = 4
+train_epochs = 10 # overiden by max_steps
 warmup_steps = 4000
-max_steps = 1000000  # 5 million of update steps maximum
-save_total_limit = 3
+max_steps = 250000# 250k update steps maximum, overides train_epochs...
+save_total_limit = 50
 bn_freeze = int(
-    round(1e6 * (2 / 3)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
-qpar_freeze = int(round(1e6 * 0.5))  # 1/2 of all global steps
+    round(250e3 * (2 / 3)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
+qpar_freeze = int(round(250e3* 0.5))  # 1/2 of all global steps
 
 # test_size = 0.99995
 # test_size = 0.999
@@ -90,10 +90,10 @@ qpar_freeze = int(round(1e6 * 0.5))  # 1/2 of all global steps
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
-training_args = {'output_dir': "FP_marian_INF1",
-                 'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
+training_args = {'output_dir': "FP_marian_3",
+                 'metric_for_best_model': "eval_loss", 'greater_is_better': False, "load_best_model_at_end": True,
                  "save_strategy": "steps",
-                 'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
+                 'evaluation_strategy': 'steps', "save_steps": 5000, "eval_steps": 5000, 'logging_first_step': True,
                  # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
                  'learning_rate': 2e-4, 'per_device_train_batch_size': batch_size, 'warmup_steps': warmup_steps,
                  # 'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps':0,
@@ -121,7 +121,7 @@ callback2 = TestRobustCallback(pipe.trainer, train['test'], "trainEuParlFP_EuPar
 callback3 = TestRobustCallback(pipe.trainer, validation['test'], "trainEuParlFP_OpenSubs_test_cuda")
 # callback3 = TestRobustCallback(pipe.trainer, small_open['test'], "open_subs_cuda_test")
 
-# callback4 = EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0)
+callback4 = EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0)
 
 # callback5 = CometOneExperimentCallback()
 
@@ -130,16 +130,16 @@ pipe.trainer.add_callback(callback1)
 pipe.trainer.add_callback(callback2)
 pipe.trainer.add_callback(callback3)
 
-# pipe.trainer.add_callback(callback4)
+pipe.trainer.add_callback(callback4)
 
 # pipe.trainer.add_callback(callback5)
 
 print("Training FP on EuroParl:")
 pipe.run()
 
-modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_INF1_marianmt_v2_en-sk_euparl-openSubs_model',
+modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_3_marianmt_v2_en-sk_openSubs-euparl_model',
                                push_to_hub=False)
-modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_INF1_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
+modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_3_marianmt_v2_en-sk_openSubs-euparl_tokenizer',
                                    push_to_hub=False)
 
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
