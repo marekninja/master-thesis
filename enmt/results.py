@@ -23,12 +23,13 @@ class Scenario(Enum):
     Args:
         Enum (EVAL): Evaluate provided model
         Enum (TRAIN): Train provided model
+        Enum (FT_EVALL: Evaluate model on validation set before fine tuning
         Enum (QUANT_AWARE_TUNE_EVAL): Quantization-Aware fine-tuning of provided model and evaluation
-        # Enum (QUANT_AWARE_TRAIN_EVAL): Quantization-Aware training from scratch of provided model and evaluation
 
     """
     EVAL = "EVALUATE"
     TRAIN = "TRAIN_EVAL"
+    FT_EVAL = "FINE-TUNE_EVAL"
     QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"  # QAT uses modified training loop
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
@@ -146,12 +147,23 @@ class Pipeline():
                 compute_metrics=self._compute_metrics,
                 callbacks=callbacks
             )
-        else:
+        elif scenario == Scenario.EVAL:
             self.trainer = LogSeq2SeqTrainer(
                 self.model,
                 self.training_args,
                 train_dataset=dataset['train'],
                 eval_dataset=dataset['test'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
+        elif scenario == Scenario.FT_EVAL:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
@@ -168,7 +180,7 @@ class Pipeline():
         scenario = self.scenario
         print(f"Pipeline running with {scenario}...")
 
-        if scenario == Scenario.EVAL:
+        if scenario in [Scenario.EVAL, Scenario.FT_EVAL]:
             print(self.trainer.evaluate(metric_key_prefix= self.metric_key_prefix))
 
         elif scenario == Scenario.QUANT_AWARE_TUNE or scenario == Scenario.TRAIN:
