@@ -76,8 +76,8 @@ warmup_steps = 0
 max_steps = -1 # is negative => is not used; otherwise overides train_epochs
 save_total_limit = 50
 bn_freeze = int(
-    round(250e3 * (2 / 3)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
-qpar_freeze = int(round(250e3* 0.5))  # 1/2 of all global steps
+    round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
+qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
 
 # test_size = 0.99995
 # test_size = 0.999
