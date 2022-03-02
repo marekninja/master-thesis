@@ -57,7 +57,6 @@ class Pipeline():
         self.model = model.model
         self.tokenizer = model.tokenizer
         self.modelWrapper = model
-        self.metric = load_metric("sacrebleu")
         self.scenario = scenario
 
         def name(x: str = "pipeline"): return x + "_" + uuid.uuid4().hex + "_" + self.scenario.value
@@ -81,6 +80,7 @@ class Pipeline():
 
             training_args['output_dir'] = dir
 
+        self.metric = load_metric("sacrebleu", cache_dir=os.path.join(training_args['output_dir'],'cache'))
 
 
         print("output_dir for Pipeline is: ", training_args['output_dir'])

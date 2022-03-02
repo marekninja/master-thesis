@@ -91,7 +91,7 @@ qpar_freeze = int(round(1e6*0.5)) # 1/2 of all global steps
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
 
-training_args = {'output_dir':"QAT_marian_INF1",
+training_args = {'output_dir':"/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/QAT_marian_INF1",
                  'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                  "save_strategy": "steps",
                  'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,

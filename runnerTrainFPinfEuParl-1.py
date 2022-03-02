@@ -90,7 +90,7 @@ qpar_freeze = int(round(1e6 * 0.5))  # 1/2 of all global steps
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
-training_args = {'output_dir': "FP_marian_INF1",
+training_args = {'output_dir': "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_INF1",
                  'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
                  "save_strategy": "steps",
                  'evaluation_strategy': 'steps', "save_steps": 10000, "eval_steps": 10000, 'logging_first_step': True,
@@ -105,7 +105,7 @@ training_args = {'output_dir': "FP_marian_INF1",
                  'no_cuda': False,
                  'fp16': False, 'push_to_hub': False,
                  'disable_tqdm': True,
-                 # 'resume_from_checkpoint':'',
+                 'resume_from_checkpoint':'./FP_marian_INF1/checkpoint-50000',
                  # 'report_to': "none"
                  }
 
