@@ -104,7 +104,7 @@ training_args = {"save_strategy": "no",
                  'per_device_eval_batch_size': valid_batch_size, 'weight_decay': 0.01, 'save_total_limit': save_total_limit,
                  'num_train_epochs': train_epochs, "max_steps": max_steps, 'predict_with_generate': True,
                  'generation_num_beams': 1,
-                 # 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
+                 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
                  'no_cuda': False,
                  'fp16': False, 'push_to_hub': False,
                  'disable_tqdm': True,
@@ -128,7 +128,7 @@ pipePreFTeval.run()
 # 2. Fine-Tune for EuroParl - metric for this pipeline is eval_bleu
 # 2.1 validate on EuroParl
 modelQAT.quantizeQATStart(test_tr=False)
-pipe = Pipeline(Scenario.TRAIN, model=modelQAT, dataset=train,
+pipe = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset=train,
                 training_args=training_args)
 
 # 2.1 validate on OpenSubs
