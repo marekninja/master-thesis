@@ -96,6 +96,15 @@ qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
 training_args = {"save_strategy": "no",
+                 'per_device_eval_batch_size': valid_batch_size, 'predict_with_generate': True,
+                 'generation_num_beams': 1,
+                 'no_cuda': False,
+                 'fp16': False, 'push_to_hub': False,
+                 'disable_tqdm': True,
+                 'report_to': "none"
+                 }
+
+training_args_q = {"save_strategy": "no",
                  'evaluation_strategy': 'steps', "eval_steps": 200, 'logging_first_step': True,
                  # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
                  'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps': warmup_steps,
@@ -111,6 +120,7 @@ training_args = {"save_strategy": "no",
                  # 'resume_from_checkpoint':'',
                  'report_to': "none"
                  }
+
 
 # 1. Evaluate on validation set, to know model performance before finetuning
 # 1.1 Eval EuroParl
@@ -129,7 +139,7 @@ pipePreFTeval.run()
 # 2.1 validate on EuroParl
 modelQAT.quantizeQATStart(test_tr=False)
 pipe = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset=train,
-                training_args=training_args)
+                training_args=training_args_q)
 
 # 2.1 validate on OpenSubs
 validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
