@@ -116,12 +116,14 @@ training_args = {"save_strategy": "no",
 # 1.1 Eval EuroParl
 pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, train, training_args, metric_key_prefix="trainOpusFP_EuParl_eval")
 pipePreFTeval.trainer.add_callback(CometOneExperimentCallback())
+pipePreFTeval.run()
 
 
 # 1.2 Eval OpenSubs
 validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, validation, training_args, metric_key_prefix="trainOpusFP_OpenSubs_eval")
 pipePreFTeval.trainer.add_callback(CometContinueExperimentCallback())
+pipePreFTeval.run()
 
 # 2. Fine-Tune for EuroParl - metric for this pipeline is eval_bleu
 # 2.1 validate on EuroParl
