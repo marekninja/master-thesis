@@ -127,7 +127,7 @@ pipePreFTeval.run()
 
 # 2. Fine-Tune for EuroParl - metric for this pipeline is eval_bleu
 # 2.1 validate on EuroParl
-modelQAT.quantizeQATStart()
+modelQAT.quantizeQATStart(test_tr=False)
 pipe = Pipeline(Scenario.TRAIN, model=modelQAT, dataset=train,
                 training_args=training_args)
 
