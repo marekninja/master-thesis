@@ -95,9 +95,7 @@ qpar_freeze = int(round(250e3* 0.5))  # 1/2 of all global steps
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
-training_args = {'output_dir': "FP_marian_3",
-                 'metric_for_best_model': "eval_loss", 'greater_is_better': False, "load_best_model_at_end": True,
-                 "save_strategy": "no",
+training_args = {"save_strategy": "no",
                  'evaluation_strategy': 'steps', "eval_steps": 200, 'logging_first_step': True,
                  # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
                  'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps': warmup_steps,
@@ -111,7 +109,7 @@ training_args = {'output_dir': "FP_marian_3",
                  'fp16': False, 'push_to_hub': False,
                  'disable_tqdm': True,
                  # 'resume_from_checkpoint':'',
-                 # 'report_to': "none"
+                 'report_to': "none"
                  }
 
 # 1. Evaluate on validation set, to know model performance before finetuning
