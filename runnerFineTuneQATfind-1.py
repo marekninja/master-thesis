@@ -167,7 +167,7 @@ for dir in dirs:
     # 1. Evaluate on validation set, to know model performance before finetuning
     # 1.1 Eval EuroParl
     train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
-    pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, train, training_args, metric_key_prefix="trainOpusFP_EuParl_eval")
+    pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, train, training_args, metric_key_prefix="trainEuParlFP_EuParl_eval")
     pipePreFTeval.trainer.add_callback(CometOneExperimentCallback())
     pipePreFTeval.run()
 
@@ -175,7 +175,7 @@ for dir in dirs:
 
     # 1.2 Eval OpenSubs
     validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
-    pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, validation, training_args, metric_key_prefix="trainOpusFP_OpenSubs_eval")
+    pipePreFTeval = Pipeline(Scenario.FT_EVAL, modelQAT, validation, training_args, metric_key_prefix="trainEuParlFP_OpenSubs_eval")
     pipePreFTeval.trainer.add_callback(CometContinueExperimentCallback())
     pipePreFTeval.run()
 
@@ -190,10 +190,10 @@ for dir in dirs:
     validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
     validation.preprocess(tokenizer=modelQAT.tokenizer)
 
-    callback1 = RobustCallback(pipe.trainer, validation['val'], "trainOpusFP_fineTuneEuParlQAT_OpenSubs_eval")
+    callback1 = RobustCallback(pipe.trainer, validation['val'], "trainEuParlFP_fineTuneEuParlQAT_OpenSubs_eval")
 
-    callback2 = TestRobustCallback(pipe.trainer, train['test'], "trainOpusFP_fineTuneEuParlQAT_EuParl_test")
-    callback3 = TestRobustCallback(pipe.trainer, validation['test'], "trainOpusFP_fineTuneEuParlQAT_OpenSubs_test")
+    callback2 = TestRobustCallback(pipe.trainer, train['test'], "trainEuParlFP_fineTuneEuParlQAT_EuParl_test")
+    callback3 = TestRobustCallback(pipe.trainer, validation['test'], "trainEuParlFP_fineTuneEuParlQAT_OpenSubs_test")
 
     callback5 = CometContinueExperimentCallback()
 
