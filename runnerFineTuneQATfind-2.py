@@ -22,7 +22,7 @@ Using checkpoints of FP_marian_3 model. Trained on EuParl,
     this model https://www.comet.ml/marekninja/huggingface/46f1064a08c04f72b8bf54f400bc68b4
         model was trained for 95k steps - cca 10.8 epochs
         
-THIS DOES EVERY SECOND CHECKPOINT, STARTING WITH INDEX 0
+THIS DOES EVERY SECOND CHECKPOINT, STARTING WITH INDEX 1
 
 For every checkpoint (every 10k steps) we do QA fine-tuning for 2 epochs.
 
@@ -120,13 +120,12 @@ experiment_name = "trainedFP-{step} QAfineTune EuParl"
 
 
 dirs = sorted([f for f in glob(os.path.join(checkpoints_dir,"checkpoint-*"))], key= lambda x: int(re.findall(".*checkpoint-(\d+)",x)[0]))
-dirs = dirs[0::2]
+dirs = dirs[1::2]
 checkpoints = [c for d in dirs if os.path.isfile(c := os.path.join(d,"pytorch_model.bin"))]
 
 print(dirs)
 print(checkpoints)
 # exit()
-
 
 for dir in dirs:
 
