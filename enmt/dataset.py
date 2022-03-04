@@ -85,7 +85,9 @@ class Dataset():
 
         # RX = re.compile('([\\`/<>:"\|\?\*])')
 
-        dump_name = self.name + "_" + tokenizer.name_or_path + "_"+ tokenizer.source_lang + "-" +\
+        # dump_name = self.name + "_" + tokenizer.name_or_path + "_"+ tokenizer.source_lang + "-" +\
+        #             tokenizer.target_lang + "_preprocessed_dump"
+        dump_name = self.name + "_" + tokenizer.alias + "_" + tokenizer.source_lang + "-" + \
                     tokenizer.target_lang + "_preprocessed_dump"
         dump_name = re.sub(r'[\\`/<>:"|?*]', '-', dump_name)
         preprocessed_path = os.path.join(dir_path,"datasets","preprocessed_pickled", dump_name)

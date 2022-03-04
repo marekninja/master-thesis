@@ -15,7 +15,7 @@ class ModelWrapper():
     """
 
     def __init__(self, pretrained_model_name_or_path: str, model=None, tokenizer=None, isQuantized=None) -> None:
-        """Init of pretrained HF model and tokenizer.
+        """Init of pretrained HF model and tokenizer. Supports Helsinki-NLP-opus-mt-en-sk MarianMT model. Some things are hardcoded...
 
         Args:
             pretrained_model_name_or_path (str): Name of the model from the HF hub
@@ -30,6 +30,7 @@ class ModelWrapper():
                 pretrained_model_name_or_path)
             self.tokenizer = AutoTokenizer.from_pretrained(
                 pretrained_model_name_or_path)
+            self.tokenizer.alias = "Helsinki-NLP-opus-mt-en-sk" #hardcoded, so that tokenized dataset can be pickled
             self.isQuantized = False
             self.isPrepared = False
             print(
@@ -230,6 +231,8 @@ def _test_translation(model_wrapped: ModelWrapper):
     # model_wrapped.model.eval()
     tok = model_wrapped.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt",
                           padding=True)
+
+    tok.to(model_wrapped.model.device)
     translated = model_wrapped.model.generate(**tok)
     print("Example translation:",[model_wrapped.tokenizer.decode(t, skip_special_tokens=True) for t in translated])
 
