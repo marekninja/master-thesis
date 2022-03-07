@@ -99,8 +99,8 @@ save_total_limit = 3
 bn_freeze = int(
     round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
-checkpoints_dir = "./FP_marian_3/"
-# checkpoints_dir = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/"
+# checkpoints_dir = "./FP_marian_3/"
+checkpoints_dir = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/"
 experiment_name_template = "trainedFP-{step} QAfineTune EuParl"
 
 # test_size = 0.99995
