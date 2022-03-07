@@ -101,7 +101,7 @@ bn_freeze = int(
 qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
 # checkpoints_dir = "./FP_marian_3/"
 checkpoints_dir = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/"
-experiment_name = "trainedFP-{step} QAfineTune EuParl"
+experiment_name_template = "trainedFP-{step} QAfineTune EuParl"
 
 # test_size = 0.99995
 # test_size = 0.999
@@ -132,7 +132,7 @@ for dir in dirs:
 
 
     start_step = re.findall(".*checkpoint-(\d+)",dir)[0]
-    experiment_name = re.sub("{step}",start_step,experiment_name)
+    experiment_name = re.sub("{step}",start_step,experiment_name_template)
 
 
     training_args = {"save_strategy": "no",
