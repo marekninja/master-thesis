@@ -43,7 +43,7 @@ nvidia-smi -L
     lists available cuda devices on system
     use the number (might be different indexing)
 
-CUDA_VISIBLE_DEVICES=5 python runnerAll.py 
+CUDA_VISIBLE_DEVICES=-1 COMET_API_KEY=apikey python runnerFile.py
 
 Profiling:
 
