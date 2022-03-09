@@ -31,6 +31,7 @@ class Scenario(Enum):
     TRAIN = "TRAIN_EVAL"
     FT_EVAL = "FINE-TUNE_EVAL"
     QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"  # QAT uses modified training loop
+    CALIBRATE = "CALIBRATE"
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
@@ -125,6 +126,10 @@ class Pipeline():
             if "val" not in dataset.sets:
                 raise RuntimeError("Dataset does not have 'val' split")
 
+        if scenario == Scenario.CALIBRATE:
+            if "train" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'train' split")
+
         if scenario == Scenario.QUANT_AWARE_TUNE:
             self.trainer = QatTrainer(
                 self.model,
@@ -169,6 +174,17 @@ class Pipeline():
                 compute_metrics=self._compute_metrics,
                 callbacks=callbacks
             )
+        elif scenario == Scenario.CALIBRATE:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=None,
+                eval_dataset=dataset['train'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
         print(
             f"Pipeline with {model.pretrained_model_name_or_path} ready to run!")
 
@@ -180,7 +196,7 @@ class Pipeline():
         scenario = self.scenario
         print(f"Pipeline running with {scenario}...")
 
-        if scenario in [Scenario.EVAL, Scenario.FT_EVAL]:
+        if scenario in [Scenario.EVAL, Scenario.FT_EVAL, Scenario.CALIBRATE]:
             print(self.trainer.evaluate(metric_key_prefix= self.metric_key_prefix))
 
         elif scenario == Scenario.QUANT_AWARE_TUNE or scenario == Scenario.TRAIN:

@@ -14,7 +14,7 @@ class ModelWrapper():
     *   creation of quantized model
     """
 
-    def __init__(self, pretrained_model_name_or_path: str, model=None, tokenizer=None, isQuantized=None) -> None:
+    def __init__(self, pretrained_model_name_or_path: str, pretrained_tokenizer_name_or_path=None, model=None, tokenizer=None, isQuantized=None) -> None:
         """Init of pretrained HF model and tokenizer. Supports Helsinki-NLP-opus-mt-en-sk MarianMT model. Some things are hardcoded...
 
         Args:
@@ -28,8 +28,12 @@ class ModelWrapper():
 
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 pretrained_model_name_or_path)
+
+            if pretrained_tokenizer_name_or_path is None:
+                pretrained_tokenizer_name_or_path = pretrained_model_name_or_path
+
             self.tokenizer = AutoTokenizer.from_pretrained(
-                pretrained_model_name_or_path)
+                pretrained_tokenizer_name_or_path)
             self.tokenizer.alias = "Helsinki-NLP-opus-mt-en-sk" #hardcoded, so that tokenized dataset can be pickled
             self.isQuantized = False
             self.isPrepared = False
