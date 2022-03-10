@@ -67,11 +67,11 @@ _test_translation(modelQAT)
 
 test_size = 40000
 valid_size = 400
-batch_size = 32
+batch_size = 16
 valid_batch_size = batch_size
 eval_batch_size_gpu = batch_size
 eval_batch_size_cpu = batch_size // 2
-grad_acc_steps = 2
+grad_acc_steps = 4
 train_epochs = 10 # overiden by max_steps
 warmup_steps = 4000
 max_steps = 125000# 250k update steps maximum, overides train_epochs...
