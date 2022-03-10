@@ -98,7 +98,7 @@ experiment_name = "FP train EuParl normal"
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
 
-training_args = {'output_dir': "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_5",
+training_args = {'output_dir': "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_5_small",
                  'metric_for_best_model': "eval_loss", 'greater_is_better': False, "load_best_model_at_end": True,
                  "save_strategy": "steps",
                  'evaluation_strategy': 'steps', "save_steps": 5000, "eval_steps": 5000, 'logging_first_step': True,
@@ -147,7 +147,7 @@ pipe.trainer.add_callback(callback5)
 print("Training FP on EuroParl:")
 pipe.run()
 
-pipe.trainer.save_model('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
+pipe.trainer.save_model('./saved_models/trained/FP_marian_5_smaller_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
 
 _test_translation(modelQAT)
 
@@ -156,10 +156,10 @@ comet_ml.get_global_experiment().set_name(experiment_name)
 
 # torch.save(modelQAT.model.state_dict(),'./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model/model_state_dict.pth')
 #
-modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model',
+modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_5_smaller_marianmt_v2_en-sk_euparl-openSubs_model',
                                push_to_hub=False)
-modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
-                                   push_to_hub=False)
+# modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
+#                                    push_to_hub=False)
 
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 # validation = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
