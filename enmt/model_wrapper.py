@@ -190,7 +190,7 @@ class ModelWrapper():
         """
         return _makeQuantized(self, mode)
 
-    def reset(self):
+    def reset_obsolete(self):
         """Resets the model. Model can be trained from scratch.
         """
 
@@ -206,6 +206,17 @@ class ModelWrapper():
         reinit_model_weights(self.model)
         self.model._keys_to_ignore_on_save = None
         # self.model = model_type(config)
+
+    def reset(self):
+        """Resets the model. Model can be trained from scratch.
+           Preserves positional embedings weights (if static)
+        """
+
+        config = self.model.config
+        model_type = type(self.model)
+        # reinit_model_weights(self.model)
+        # self.model._keys_to_ignore_on_save = None
+        self.model = model_type(config)
 
     def getSize(self) -> float:
         torch.save(self.model.state_dict(), "temp.p")
