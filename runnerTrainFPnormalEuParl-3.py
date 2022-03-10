@@ -111,7 +111,10 @@ training_args = {'output_dir': "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic
                  'generation_num_beams': 1,
                  # 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
                  'no_cuda': False,
-                 'fp16': False, 'push_to_hub': False,
+                 'fp16': False,
+                 'hub_model_id':'marekninja/marian_euparl_test',
+                 'hub_strategy':'every_save',
+                 'push_to_hub': True,
                  'disable_tqdm': True,
                  # 'resume_from_checkpoint':'/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/checkpoint-80000',
                  'report_to': "none"
@@ -153,10 +156,10 @@ comet_ml.get_global_experiment().set_name(experiment_name)
 
 # torch.save(modelQAT.model.state_dict(),'./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model/model_state_dict.pth')
 #
-# modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model',
-#                                push_to_hub=False)
-# modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
-#                                    push_to_hub=False)
+modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_model',
+                               push_to_hub=False)
+modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_5_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
+                                   push_to_hub=False)
 
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 # validation = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
