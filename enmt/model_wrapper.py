@@ -204,6 +204,7 @@ class ModelWrapper():
         # config = self.model.config
         # model_type = type(self.model)
         reinit_model_weights(self.model)
+        self.model._keys_to_ignore_on_save = None
         # self.model = model_type(config)
 
     def getSize(self) -> float:

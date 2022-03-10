@@ -147,7 +147,7 @@ pipe.trainer.add_callback(callback5)
 print("Training FP on EuroParl:")
 pipe.run()
 
-pipe.trainer.push_to_hub()
+pipe.trainer.push_to_hub(repo_name="")
 pipe.trainer.save_model('./saved_models/trained/FP_marian_5_smaller_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
 
 _test_translation(modelQAT)

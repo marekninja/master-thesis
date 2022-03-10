@@ -62,6 +62,7 @@ _test_translation(modelQAT)
 
 print("*** Training FP Marian model from scratch ***")
 modelQAT.reset()
+modelQAT.model._keys_to_ignore_on_save = None
 
 _test_translation(modelQAT)
 
@@ -150,12 +151,12 @@ _test_translation(modelQAT)
 comet_ml.get_global_experiment().set_name(experiment_name)
 
 
-torch.save(modelQAT.model.state_dict(),'./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_model/model_state_dict.pth')
-
-modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_model',
-                               push_to_hub=False)
-modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
-                                   push_to_hub=False)
+# torch.save(modelQAT.model.state_dict(),'./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_model/model_state_dict.pth')
+#
+# modelQAT.model.save_pretrained('./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_model',
+#                                push_to_hub=False)
+# modelQAT.tokenizer.save_pretrained('./saved_models/trained/FP_marian_4_marianmt_v2_en-sk_euparl-openSubs_tokenizer',
+#                                    push_to_hub=False)
 
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 # validation = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
