@@ -62,6 +62,7 @@ _test_translation(modelQAT)
 
 print("*** Training FP Marian model from scratch ***")
 modelQAT.reset()
+modelQAT.model._keys_to_ignore_on_save = None
 
 _test_translation(modelQAT)
 
