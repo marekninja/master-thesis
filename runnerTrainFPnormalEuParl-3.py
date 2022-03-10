@@ -112,8 +112,8 @@ training_args = {'output_dir': "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic
                  # 'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
                  'no_cuda': False,
                  'fp16': False,
-                 'hub_model_id':'marekninja/marian_euparl_test',
-                 'hub_strategy':'every_save',
+                 # 'hub_model_id':'marekninja/marian_euparl_test',
+                 # 'hub_strategy':'every_save',
                  'push_to_hub': True,
                  'disable_tqdm': True,
                  # 'resume_from_checkpoint':'/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/checkpoint-80000',
@@ -147,6 +147,7 @@ pipe.trainer.add_callback(callback5)
 print("Training FP on EuroParl:")
 pipe.run()
 
+pipe.trainer.push_to_hub()
 pipe.trainer.save_model('./saved_models/trained/FP_marian_5_smaller_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
 
 _test_translation(modelQAT)
