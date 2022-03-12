@@ -91,10 +91,11 @@ eval_batch_size_cpu = batch_size // 2
 grad_acc_steps = 4
 train_epochs = 2 # overiden by max_steps
 warmup_steps = 0
-eval_steps = 200
+eval_steps = 500
+save_steps = 500
 # max_steps = 125000# 250k update steps maximum, overides train_epochs...
 max_steps = -1 # is negative => is not used; otherwise overides train_epochs
-save_total_limit = 3
+save_total_limit = 1
 bn_freeze = int(
     round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
@@ -144,8 +145,10 @@ for dir in dirs:
                      'report_to': "none"
                      }
 
-    training_args_q = {"save_strategy": "no",
-                       'evaluation_strategy': 'steps', "eval_steps": eval_steps, 'logging_first_step': True,
+    training_args_q = {"output_dir":'/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/qat_find_checkpoints/'+start_step,
+                       'evaluation_strategy': 'steps', "eval_steps": eval_steps, "save_steps":save_steps,'logging_first_step': True,
+                       'metric_for_best_model': "eval_bleu", 'greater_is_better': True, "load_best_model_at_end": True,
+                       "save_strategy": "steps",
                        # 'evaluation_strategy': 'steps', "save_steps": 500, "eval_steps": 500, 'logging_first_step': True,
                        'learning_rate': 2e-4, 'per_device_train_batch_size': batch_size, 'warmup_steps': warmup_steps,
                        # 'learning_rate': 2e-5, 'per_device_train_batch_size': batch_size, 'warmup_steps':0,
@@ -187,7 +190,6 @@ for dir in dirs:
     train = EuroParl(test_size=test_size, valid_size=valid_size, seed=42)
     pipe = Pipeline(Scenario.QUANT_AWARE_TUNE, model=modelQAT, dataset=train,
                     training_args=training_args_q)
-
     # 2.1 validate on OpenSubs
     validation = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
     validation.preprocess(tokenizer=modelQAT.tokenizer)
@@ -207,7 +209,7 @@ for dir in dirs:
     print("FineTuning QAT on EuroParl (model previously pre-trained FP) :")
     pipe.run()
 
-    pipe.trainer.save_model('/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_QAT_find/'+start_step+"FP_marian_6_QAT_find")
+    pipe.trainer.save_model('/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_QAT_fine-tuned/'+start_step+"_FP_marian_6_QAT_find")
 
     _test_translation(modelQAT)
 
