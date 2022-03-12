@@ -91,8 +91,8 @@ eval_batch_size_cpu = batch_size // 2
 grad_acc_steps = 8
 train_epochs = 2 # overiden by max_steps
 warmup_steps = 0
-eval_steps = 500
-save_steps = 500
+eval_steps = 1000
+save_steps = 1000
 # max_steps = 125000# 250k update steps maximum, overides train_epochs...
 max_steps = -1 # is negative => is not used; otherwise overides train_epochs
 save_total_limit = 1
