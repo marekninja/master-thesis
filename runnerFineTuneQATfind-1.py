@@ -18,13 +18,12 @@ Searching for ideal point to continue QAT finetuning
 
 Based on previous experiments - LR = 2e-4, train epochs = 2
 
-Using checkpoints of FP_marian_3 model. Trained on EuParl, 
-    this model https://www.comet.ml/marekninja/huggingface/46f1064a08c04f72b8bf54f400bc68b4
-        model was trained for 95k steps - cca 10.8 epochs
-        
-THIS DOES EVERY SECOND CHECKPOINT, STARTING WITH INDEX 0
+Using checkpoints of FP_marian_6 model. Trained on EuParl, 
+    this model https://www.comet.ml/marekninja/huggingface/2499fb4d213b4d2fa9e00be3469af540
+        model was trained for 100k steps - cca 10.6 epochs
 
-For every checkpoint (every 10k steps) we do QA fine-tuning for 2 epochs.
+For every checkpoint (every 5k steps) we do QA fine-tuning for 2 epochs.
+    By setting gpu_index and max_gpu_cards it is possible to run this distributed
 
 Questions:
     When to stop FP training and continue QA fine-tuning?
