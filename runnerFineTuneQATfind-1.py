@@ -83,7 +83,7 @@ with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
 
 
 # smaller validation set - to allow for frequent metrics evalation
-test_size = 400
+test_size = 40000
 valid_size = 400
 batch_size = 16
 valid_batch_size = batch_size
@@ -100,8 +100,10 @@ bn_freeze = int(
     round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
 # checkpoints_dir = "./FP_marian_3/"
-checkpoints_dir = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_3/"
+checkpoints_dir = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_a2680f17a7954ecf94d72c045a83bbf0_TRAIN_EVAL/"
 experiment_name_template = "trainedFP-{step} QAfineTune EuParl"
+max_gpu_cards = 3
+gpu_index = 0 # should be from interval [0,max-1]
 
 # test_size = 0.99995
 # test_size = 0.999
@@ -118,13 +120,12 @@ experiment_name_template = "trainedFP-{step} QAfineTune EuParl"
 
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 
-
 dirs = sorted([f for f in glob(os.path.join(checkpoints_dir,"checkpoint-*"))], key= lambda x: int(re.findall(".*checkpoint-(\d+)",x)[0]))
-dirs = dirs[0::2]
-checkpoints = [c for d in dirs if os.path.isfile(c := os.path.join(d,"pytorch_model.bin"))]
+dirs = dirs[gpu_index::max_gpu_cards]
+# checkpoints = [c for d in dirs if os.path.isfile(c := os.path.join(d,"pytorch_model.bin"))]
 
 print(dirs)
-print(checkpoints)
+# print(checkpoints)
 # exit()
 
 
@@ -206,6 +207,8 @@ for dir in dirs:
 
     print("FineTuning QAT on EuroParl (model previously pre-trained FP) :")
     pipe.run()
+
+    pipe.trainer.save_model('/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_QAT_find/'+start_step+"FP_marian_6_QAT_find")
 
     _test_translation(modelQAT)
 
