@@ -84,11 +84,11 @@ with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
 # smaller validation set - to allow for frequent metrics evalation
 test_size = 40000
 valid_size = 400
-batch_size = 16
+batch_size = 8
 valid_batch_size = batch_size
 eval_batch_size_gpu = batch_size
 eval_batch_size_cpu = batch_size // 2
-grad_acc_steps = 4
+grad_acc_steps = 8
 train_epochs = 2 # overiden by max_steps
 warmup_steps = 0
 eval_steps = 500
