@@ -128,7 +128,8 @@ print("Training FP on EuroParl:")
 pipe.run()
 
 # this should be saved without positional embedings - they are static be default
-pipe.trainer.save_model('./saved_models/trained/FP_marian_EmbedsExplore_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
+saved_model_dir = './saved_models/trained/FP_marian_EmbedsExplore_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer'
+pipe.trainer.save_model(saved_model_dir)
 
 _test_translation(modelQAT)
 
@@ -153,7 +154,7 @@ bn_freeze = int(
     round((599558 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round((599558 / 64)* 0.25))  # 1/2 of all global steps
 # checkpoints_dir = "./FP_marian_3/"
-saved_model_dir = "./saved_models/trained/FP_marian_EmbedsReset_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer"
+
 experiment_name = "QAfineTune EmbedingsAnomaly"
 
 
@@ -258,7 +259,6 @@ bn_freeze = int(
     round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
 qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
 # checkpoints_dir = "./FP_marian_3/"
-saved_model_dir = "./saved_models/trained/FP_marian_EmbedsReset_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer"
 experiment_name = "FPfineTune EmbedingsAnomaly"
 
 
