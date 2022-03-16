@@ -150,8 +150,8 @@ eval_steps = 1000
 max_steps = -1 # is negative => is not used; otherwise overides train_epochs
 save_total_limit = 2
 bn_freeze = int(
-    round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
-qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
+    round((599558 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
+qpar_freeze = int(round((599558 / 64)* 0.25))  # 1/2 of all global steps
 # checkpoints_dir = "./FP_marian_3/"
 saved_model_dir = "./saved_models/trained/FP_marian_EmbedsReset_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer"
 experiment_name = "QAfineTune EmbedingsAnomaly"
