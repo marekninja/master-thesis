@@ -232,7 +232,7 @@ print("FineTuning QAT on EuroParl (model previously pre-trained FP) :")
 pipe.run()
 
 # model is QAT finetuned for SINUSOIDAL positional embedings
-pipe.trainer.save_model('./saved_models/trained/FP_marian_QAT_embedsExplore_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
+# pipe.trainer.save_model('./saved_models/trained/FP_marian_QAT_embedsExplore_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer')
 
 _test_translation(modelQAT)
 
