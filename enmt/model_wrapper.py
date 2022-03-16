@@ -14,7 +14,7 @@ class ModelWrapper():
     *   creation of quantized model
     """
 
-    def __init__(self, pretrained_model_name_or_path: str, pretrained_tokenizer_name_or_path=None, model=None, tokenizer=None, isQuantized=None) -> None:
+    def __init__(self, pretrained_model_name_or_path: str, seed=42, pretrained_tokenizer_name_or_path=None, model=None, tokenizer=None, isQuantized=None) -> None:
         """Init of pretrained HF model and tokenizer. Supports Helsinki-NLP-opus-mt-en-sk MarianMT model. Some things are hardcoded...
 
         Args:
@@ -37,6 +37,10 @@ class ModelWrapper():
             self.tokenizer.alias = "Helsinki-NLP-opus-mt-en-sk" #hardcoded, so that tokenized dataset can be pickled
             self.isQuantized = False
             self.isPrepared = False
+
+
+
+
             print(
                 f"Created model {pretrained_model_name_or_path} succesfully!")
             print(f"Size of model: {self.getSize()}")
@@ -45,6 +49,9 @@ class ModelWrapper():
             self.model = model
             self.tokenizer = tokenizer
             self.isQuantized = isQuantized
+
+        self.seed = seed
+        torch.manual_seed(self.seed)
 
 
 
@@ -190,7 +197,7 @@ class ModelWrapper():
         """
         return _makeQuantized(self, mode)
 
-    def reset_obsolete(self):
+    def reset_obsolete(self,):
         """Resets the model. Model can be trained from scratch.
         """
 
@@ -201,11 +208,10 @@ class ModelWrapper():
                         m_child.reset_parameters()
                     reinit_model_weights(m_child)
 
-        # config = self.model.config
-        # model_type = type(self.model)
+        torch.manual_seed(self.seed)
         reinit_model_weights(self.model)
-        self.model._keys_to_ignore_on_save = None
-        # self.model = model_type(config)
+        # self.model._keys_to_ignore_on_save = None
+
 
     def reset(self):
         """Resets the model. Model can be trained from scratch.
@@ -214,8 +220,6 @@ class ModelWrapper():
 
         config = self.model.config
         model_type = type(self.model)
-        # reinit_model_weights(self.model)
-        # self.model._keys_to_ignore_on_save = None
         self.model = model_type(config)
 
     def getSize(self) -> float:
