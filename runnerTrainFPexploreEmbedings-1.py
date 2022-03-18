@@ -255,10 +255,7 @@ eval_steps = 1000
 # max_steps = 125000# 250k update steps maximum, overides train_epochs...
 max_steps = -1 # is negative => is not used; otherwise overides train_epochs
 save_total_limit = 2
-bn_freeze = int(
-    round((639158 / 64) * (3/8)))  # 2/3 of all global steps, based on Pytorch tutorial should be bigger ten qpar_freeze
-qpar_freeze = int(round((639158 / 64)* 0.25))  # 1/2 of all global steps
-# checkpoints_dir = "./FP_marian_3/"
+
 experiment_name = "FPfineTune EmbedingsAnomaly"
 
 
@@ -281,7 +278,6 @@ training_args_q = {"save_strategy": "no",
                    'save_total_limit': save_total_limit,
                    'num_train_epochs': train_epochs, "max_steps": max_steps, 'predict_with_generate': True,
                    'generation_num_beams': 1,
-                   'bn_freeze': bn_freeze, 'qpar_freeze': qpar_freeze,
                    'no_cuda': False,
                    'fp16': False, 'push_to_hub': False,
                    'disable_tqdm': True,
