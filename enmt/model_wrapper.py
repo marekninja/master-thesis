@@ -197,7 +197,7 @@ class ModelWrapper():
         """
         return _makeQuantized(self, mode)
 
-    def reset_obsolete(self,):
+    def reset_obsolete(self):
         """Resets the model. Model can be trained from scratch.
         """
 
