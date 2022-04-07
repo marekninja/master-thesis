@@ -124,6 +124,10 @@ pipeTest.trainer.add_callback(CometContinueExperimentCallback())
 pipeTest.run()
 
 comet_ml.get_global_experiment().log_metric("size_on_disk",modelSize)
+comet_ml.get_global_experiment().log_metric("quantization","SQ")
+comet_ml.get_global_experiment().log_metric("quan_specs","embeds in FP")
+comet_ml.get_global_experiment().log_metric("device","CPU")
+comet_ml.get_global_experiment().log_metric("model_code","modeling_marian_quant_v2")
 comet_ml.get_global_experiment().set_name(experiment_name)
 
 training_args = {"save_strategy": "no",
