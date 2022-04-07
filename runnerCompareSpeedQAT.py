@@ -72,7 +72,7 @@ eval_batch_size_cpu = batch_size * 2 # 32 to be same as other experiments
 
 
 fp_saved_model = './saved_models/trained/FP_marian_6_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer'
-qat_saved_model = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_QAT_fine-tuned/75000_FP_marian_6_QAT_find"
+qat_saved_model = "/mnt/local/disk1/klasifikace_reflexe/MT_petrovic/in_progress/FP_marian_6_QAT_fine-tuned/75000_FP_marian_6_QAT_find/pytorch_model.bin"
 experiment_name = "QAT_CPU_EuParl measureSpeed"
 
 # modelQAT = ModelWrapper(pretrained_model_name_or_path="Helsinki-NLP/opus-mt-en-sk")
