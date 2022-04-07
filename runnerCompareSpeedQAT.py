@@ -13,6 +13,7 @@ import os
 from glob import glob
 import re
 
+import torch
 """
 Comparison of speed 
 
