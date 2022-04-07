@@ -74,7 +74,7 @@ experiment_name = "SQ_CPU_EuParl measureSpeed"
 
 
 
-training_args = {"save_strategy": "no",
+training_argsCalibrate = {"save_strategy": "no",
                  'per_device_eval_batch_size': eval_batch_size_cpu, 'predict_with_generate': True,
                  'generation_num_beams': 1,
                  'no_cuda': True,
