@@ -82,7 +82,7 @@ training_args = {"save_strategy": "no",
                  'disable_tqdm': False,
                  'report_to': "none"
                  }
-modelWrapped = ModelWrapper(pretrained_model_name_or_path=saved_model)
+modelWrapped = ModelWrapper(pretrained_model_name_or_path=fp_saved_model)
 
 # 2. Calibrate on EuParl train set
 modelWrapped.quantizeStaticStart(test_tr=True)
