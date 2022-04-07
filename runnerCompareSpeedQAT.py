@@ -100,6 +100,7 @@ pipeTest = Pipeline(Scenario.EVAL, modelWrapped, test, training_args, metric_key
 pipeTest.trainer.add_callback(CometOneExperimentCallback())
 pipeTest.run()
 
+_test_translation(model_wrapped=modelWrapped)
 comet_ml.get_global_experiment().log_metric("size_on_disk",modelSize)
 comet_ml.get_global_experiment().set_name(experiment_name)
 

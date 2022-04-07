@@ -72,7 +72,7 @@ experiment_name = "DQ_CPU_EuParl measureSpeed"
 # train = OpenSubtitles(test_size=test_size, valid_size=valid_size, seed=42)
 
 
-modelWrapped = ModelWrapper(pretrained_model_name_or_path=saved_model)
+modelWrapped = ModelWrapper(pretrained_model_name_or_path=fp_saved_model)
 modelWrapped.quantizeDynamic(True)
 
 modelSize = modelWrapped.getSize()
@@ -94,6 +94,7 @@ pipeTest = Pipeline(Scenario.EVAL, modelWrapped, test, training_args, metric_key
 pipeTest.trainer.add_callback(CometOneExperimentCallback())
 pipeTest.run()
 
+_test_translation(model_wrapped=modelWrapped)
 comet_ml.get_global_experiment().log_metric("size_on_disk",modelSize)
 comet_ml.get_global_experiment().set_name(experiment_name)
 

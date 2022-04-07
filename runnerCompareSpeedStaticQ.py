@@ -96,8 +96,8 @@ pipe.trainer.add_callback(callback5)
 print("Calibrate Static Quantization on EuroParl (model previously pre-trained FP) :")
 pipe.run()
 
-# _test_translation(modelWrapped)
-#
+_test_translation(modelWrapped)
+
 modelWrapped.model.save_pretrained('./saved_models/trainedStaticQ/SQ_FP_marian_6_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer',
                                    push_to_hub=False)
 modelWrapped.tokenizer.save_pretrained('./saved_models/trainedStaticQ/SQ_FP_marian_6_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer',

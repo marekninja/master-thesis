@@ -65,10 +65,11 @@ batch_size = 16
 eval_batch_size_cpu = batch_size * 2 # 32 to be same as other experiments
 
 
-saved_model = './saved_models/trained/FP_marian_6_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer'
+fp_saved_model = './saved_models/trained/FP_marian_6_marianmt_v2_en-sk_euparl-openSubs_model_from_trainer'
 experiment_name = "FP_CUDA_EuParl measureSpeed"
 
 
+modelWrapped = ModelWrapper(pretrained_model_name_or_path=fp_saved_model)
 modelSize = modelWrapped.getSize()
 print("Size of model state_dict on disk", modelSize)
 
@@ -87,6 +88,7 @@ pipeTest = Pipeline(Scenario.EVAL, modelWrapped, test, training_args, metric_key
 pipeTest.trainer.add_callback(CometOneExperimentCallback())
 pipeTest.run()
 
+_test_translation(model_wrapped=modelWrapped)
 comet_ml.get_global_experiment().log_metric("size_on_disk",modelSize)
 comet_ml.get_global_experiment().set_name(experiment_name)
 
