@@ -78,7 +78,7 @@ experiment_name = "QAT_CPU_EuParl measureSpeed"
 modelWrapped = ModelWrapper(pretrained_model_name_or_path=fp_saved_model)
 modelWrapped.quantizeQATStart(test_tr=True)
 
-modelWrapped.load_state_dict(torch.load(qat_saved_model))
+modelWrapped.model.load_state_dict(torch.load(qat_saved_model))
 
 modelWrapped.quantizeQATConvert(test_tr=True)
 
