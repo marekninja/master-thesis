@@ -17,11 +17,8 @@ from torch.ao.quantization.observer import MinMaxObserver, default_observer
 from torch.ao.quantization.qconfig import QConfig
 
 """Modified implementation to support QAT
-        * ReLU activation hardcoded instead of SiLU
-            * reduction of dequant operations
-            * activation from config is therefore ignored
-        * dynamicaly quantized embeddings - quantize Embedding weights, activations (output) stay FP32
-        * check bmm? 
+        * same as v2, only 1 difference:
+            * dynamic Embeddings quantization - quantize Embedding weights (output stays FP32)
 """
 
 import copy
@@ -38,6 +35,7 @@ from torch.ao.quantization.stubs import QuantStub, DeQuantStub
 from torch.nn import CrossEntropyLoss
 from torch.nn.quantized import FloatFunctional
 
+from ...activations import ACT2FN
 from ...file_utils import (
     add_end_docstrings,
     add_start_docstrings,
@@ -189,9 +187,9 @@ class MarianAttention(nn.Module):
         self.dequant_attn_p = DeQuantStub()
         self.dequant_v_states = DeQuantStub()
         self.quant_bmm2 = QuantStub()
-        # self.quant_value_states = QuantStub()
-        # self.quant_key_states = QuantStub()
-        # self.quant_key_value_states = QuantStub()
+        self.quant_value_states = QuantStub()
+        self.quant_key_states = QuantStub()
+        self.quant_key_value_states = QuantStub()
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
         return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
@@ -336,8 +334,8 @@ class MarianEncoderLayer(nn.Module):
         )
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
         self.dropout = config.dropout
-        # self.activation_fn = ACT2FN[config.activation_function]
-        self.activation_fn = nn.ReLU()
+        self.activation_fn = ACT2FN[config.activation_function]
+        # self.activation_fn = nn.ReLU()
         self.activation_dropout = config.activation_dropout
         self.fc1 = nn.Linear(self.embed_dim, config.encoder_ffn_dim)
         self.fc2 = nn.Linear(config.encoder_ffn_dim, self.embed_dim)
@@ -346,8 +344,8 @@ class MarianEncoderLayer(nn.Module):
         self.dropout_layer1 = nn.Dropout(self.dropout)
         self.dropout_layer2 = nn.Dropout(self.activation_dropout)
         self.dropout_layer3 = nn.Dropout(self.dropout)
-        # self.quant_silu = QuantStub()
-        # self.dequant_silu = DeQuantStub()
+        self.quant_silu = QuantStub()
+        self.dequant_silu = DeQuantStub()
         self.add_h_r1 = FloatFunctional()
         self.add_h_r2 = FloatFunctional()
 
@@ -386,8 +384,8 @@ class MarianEncoderLayer(nn.Module):
         residual = hidden_states
         # fixme aktivacna funkcia - vymenit SiLU za ReLU/GeLU?? - teraz viem len de/quant
         # hidden_states = self.activation_fn(self.fc1(hidden_states))
-        # hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
-        hidden_states = self.activation_fn(self.fc1(hidden_states))
+        hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
+        # hidden_states = self.activation_fn(self.fc1(hidden_states))
         # hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
         hidden_states = self.dropout_layer2(hidden_states)
         hidden_states = self.fc2(hidden_states)
@@ -424,8 +422,8 @@ class MarianDecoderLayer(nn.Module):
             is_decoder=True,
         )
         self.dropout = config.dropout
-        # self.activation_fn = ACT2FN[config.activation_function]
-        self.activation_fn = nn.ReLU()
+        self.activation_fn = ACT2FN[config.activation_function]
+        # self.activation_fn = nn.ReLU()
         self.activation_dropout = config.activation_dropout
 
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
@@ -442,8 +440,8 @@ class MarianDecoderLayer(nn.Module):
 
         self.dropout_layer = nn.Dropout(self.dropout)
         self.dropout_layer_cross = nn.Dropout(self.dropout)
-        # self.dequant_silu = DeQuantStub()
-        # self.quant_silu = QuantStub()
+        self.dequant_silu = DeQuantStub()
+        self.quant_silu = QuantStub()
         self.dropout_fc_act = nn.Dropout(self.activation_dropout)
         self.dropout_fc = nn.Dropout(self.dropout)
         self.add_r_h1 = FloatFunctional()
@@ -526,8 +524,8 @@ class MarianDecoderLayer(nn.Module):
 
         # Fully Connected
         residual = hidden_states
-        hidden_states = self.activation_fn(self.fc1(hidden_states))
-        # hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
+        # hidden_states = self.activation_fn(self.fc1(hidden_states))
+        hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
         # hidden_states = self.activation_fn(self.fc1(hidden_states))
         # hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
         hidden_states = self.dropout_fc_act(hidden_states)
@@ -753,9 +751,9 @@ class MarianEncoder(MarianPreTrainedModel):
 
         self.gradient_checkpointing = False
 
-        # self.mul_emb_scale = FloatFunctional()
-        # self.quant_in_emb = FloatFunctional()
-        # self.add_emb_pos = FloatFunctional()
+        self.mul_emb_scale = FloatFunctional()
+        self.quant_in_emb = FloatFunctional()
+        self.add_emb_pos = FloatFunctional()
         self.dropout_layer = nn.Dropout(self.dropout)
         self.quant_hidden = QuantStub()
 
@@ -932,9 +930,9 @@ class MarianDecoder(MarianPreTrainedModel):
 
         self.gradient_checkpointing = False
 
-        # self.mul_embeds_scale = FloatFunctional()
-        # self.quant_in_embeds = QuantStub()
-        # self.add_inp_pos = FloatFunctional()
+        self.mul_embeds_scale = FloatFunctional()
+        self.quant_in_embeds = QuantStub()
+        self.add_inp_pos = FloatFunctional()
         self.quant_h_states = QuantStub()
         self.dropout_layer = nn.Dropout(self.dropout)
 
@@ -1358,9 +1356,9 @@ class MarianMTModel(MarianPreTrainedModel):
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         # self.lm_head.qconfig = None
 
-        # self.add_lm_log = FloatFunctional()
+        self.add_lm_log = FloatFunctional()
         self.dequant_lm = DeQuantStub()
-        # self.quant_final_l_bias = QuantStub()
+        self.quant_final_l_bias = QuantStub()
 
         # Initialize weights and apply final processing
         self.post_init()
