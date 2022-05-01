@@ -4,7 +4,7 @@ authors:
   - family-names: "Petrovič"
     given-names: "Marek"
     orcid: "https://orcid.org/0000-0002-2801-1014"
-title: "One Bit at a Time: Impact of Quantisation on Neural Machine Translation; Framework Repository"
+title: "ENMT- Evaluation Framework for evaluation of quantization impacts on NMT Transformers"
 version: 1.0.0
 date-released: 2022-05-01
 url: "https://github.com/marekninja/master-thesis"
