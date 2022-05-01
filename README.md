@@ -21,13 +21,25 @@ Vystup prace by mal byt:
 * Porovnanie kvality a rýchlosti implementovanej metódy na viacerých doménach.
 
 
-## Notes
+## Repo Notes
 
 * Directory enmt/modified_transformers_files
     * this directory contains modified files of Transformers lib
     * modeling_marian_quant* are quantizable Marian Models - support Static Quant. and Quant.-Aware Training
+
+## Instalation notes
  
 * in some cases it is needed to have **PyTorch installed ahead of this repo**
+    * tested PyTorch version: 1.11.0.dev20210929+cu102
+
+* there might be some non-linux compatible libraries (e.g. pywin*), just skip them when it fails...
+
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 
 ## Reproducing results:
