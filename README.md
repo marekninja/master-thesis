@@ -1,5 +1,11 @@
-# master-thesis
-Master thesis repo
+# Master Thesis Repo
+
+Despite the precision of the large language models, the deployment of these models still faces some practical issues. Except for being memory-demanding, the main issue lays in the speed of prediction. In the case of generative language models, the time of auto-regressive generation scales with the output length. Another significant limitation of translation models remains in their domain-specificity given by the domain of the training data.
+    
+Our work investigates the impact of model quantization on these issues. In theory, quantisation holds a potential to address these problems through lower bit-width computations allowing for model compression, speed-up, and regularization incorporated in training. Specifically, we inspect the effect that quantization has on Transformer neural language translation model. 
+% Our results demonstrate that a quantised instance of Transformer is less prone to domain overfitting 
+    
+In addition to the obtained measurements, the contributions of this work are also in the implementations of quantized Transformer and the reusable framework for evaluation of speed, memory requirements, and distributional robustness of generative language models.
 
 # Work outcome:
 * evaluation framework
