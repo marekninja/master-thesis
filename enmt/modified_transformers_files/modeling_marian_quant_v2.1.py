@@ -13,7 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """PyTorch MarianMTModel model, ported from the Marian C++ repo."""
+from torch.ao.quantization.observer import MinMaxObserver, default_observer
+from torch.ao.quantization.qconfig import QConfig
 
+"""Modified implementation to support QAT
+        * same as v2, only 1 difference:
+            * dynamic Embeddings quantization - quantize Embedding weights (output stays FP32)
+"""
 
 import copy
 import math
@@ -47,13 +53,11 @@ from ...modeling_utils import PreTrainedModel
 from ...utils import logging
 from .configuration_marian import MarianConfig
 
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "MarianConfig"
 _TOKENIZER_FOR_DOC = "MarianTokenizer"
 _CHECKPOINT_FOR_DOC = "Helsinki-NLP/opus-mt-en-de"
-
 
 MARIAN_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "Helsinki-NLP/opus-mt-en-de",
@@ -148,12 +152,12 @@ class MarianAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int,
-        dropout: float = 0.0,
-        is_decoder: bool = False,
-        bias: bool = True,
+            self,
+            embed_dim: int,
+            num_heads: int,
+            dropout: float = 0.0,
+            is_decoder: bool = False,
+            bias: bool = True,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -191,13 +195,13 @@ class MarianAttention(nn.Module):
         return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor, #kvantizovane od encodera
-        key_value_states: Optional[torch.Tensor] = None, #fixme kvantizovat??
-        past_key_value: Optional[Tuple[torch.Tensor]] = None, #fixme kvantizovat??
-        attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
+            self,
+            hidden_states: torch.Tensor,  # kvantizovane od encodera
+            key_value_states: Optional[torch.Tensor] = None,  # fixme kvantizovat??
+            past_key_value: Optional[Tuple[torch.Tensor]] = None,  # fixme kvantizovat??
+            attention_mask: Optional[torch.Tensor] = None,
+            layer_head_mask: Optional[torch.Tensor] = None,
+            output_attentions: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         """Input shape: Batch x Time x Channel"""
 
@@ -225,7 +229,7 @@ class MarianAttention(nn.Module):
             value_states = past_key_value[1]
         elif is_cross_attention:
             # cross_attentions
-            #fixme key_value_states asi niesu kvantizovane, ked sa deje is_cross_attention
+            # fixme key_value_states asi niesu kvantizovane, ked sa deje is_cross_attention
             # key_value_states = self.quant_key_value_states(key_value_states)
             key_states = self._shape(self.k_proj(key_value_states), -1, bsz)
             value_states = self._shape(self.v_proj(key_value_states), -1, bsz)
@@ -256,7 +260,7 @@ class MarianAttention(nn.Module):
         value_states = value_states.view(*proj_shape)
 
         src_len = key_states.size(1)
-        #fixme bmm unsuported quantization
+        # fixme bmm unsuported quantization
         # attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
         attn_weights = torch.bmm(self.dequant_q_states(query_states), self.dequant_k_states(key_states.transpose(1, 2)))
 
@@ -272,7 +276,6 @@ class MarianAttention(nn.Module):
                 )
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
 
         # attn_weights = nn.functional.softmax(attn_weights, dim=-1)
         attn_weights = self.softmax_layer(attn_weights)
@@ -347,11 +350,11 @@ class MarianEncoderLayer(nn.Module):
         self.add_h_r2 = FloatFunctional()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
-        layer_head_mask: torch.Tensor,
-        output_attentions: bool = False,
+            self,
+            hidden_states: torch.Tensor,
+            attention_mask: torch.Tensor,
+            layer_head_mask: torch.Tensor,
+            output_attentions: bool = False,
     ):
         """
         Args:
@@ -379,7 +382,7 @@ class MarianEncoderLayer(nn.Module):
         hidden_states = self.self_attn_layer_norm(hidden_states)
 
         residual = hidden_states
-        #fixme aktivacna funkcia - vymenit SiLU za ReLU/GeLU?? - teraz viem len de/quant
+        # fixme aktivacna funkcia - vymenit SiLU za ReLU/GeLU?? - teraz viem len de/quant
         # hidden_states = self.activation_fn(self.fc1(hidden_states))
         hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
         # hidden_states = self.activation_fn(self.fc1(hidden_states))
@@ -391,9 +394,9 @@ class MarianEncoderLayer(nn.Module):
         hidden_states = self.add_h_r2.add(residual, hidden_states)
         hidden_states = self.final_layer_norm(hidden_states)
 
-        #fixme je tuto treba nieco robit?
+        # fixme je tuto treba nieco robit?
         if hidden_states.dtype == torch.float16 and (
-            torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
+                torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
         ):
             clamp_value = torch.finfo(hidden_states.dtype).max - 1000
             hidden_states = torch.clamp(hidden_states, min=-clamp_value, max=clamp_value)
@@ -446,16 +449,16 @@ class MarianDecoderLayer(nn.Module):
         self.add_r_h3 = FloatFunctional()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor, #kvantizovane
-        attention_mask: Optional[torch.Tensor] = None,
-        encoder_hidden_states: Optional[torch.Tensor] = None, #kvantizovane
-        encoder_attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None, #kvantizovane asi - use_cache
-        output_attentions: Optional[bool] = False,
-        use_cache: Optional[bool] = True,
+            self,
+            hidden_states: torch.Tensor,  # kvantizovane
+            attention_mask: Optional[torch.Tensor] = None,
+            encoder_hidden_states: Optional[torch.Tensor] = None,  # kvantizovane
+            encoder_attention_mask: Optional[torch.Tensor] = None,
+            layer_head_mask: Optional[torch.Tensor] = None,
+            cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
+            past_key_value: Optional[Tuple[torch.Tensor]] = None,  # kvantizovane asi - use_cache
+            output_attentions: Optional[bool] = False,
+            use_cache: Optional[bool] = True,
     ):
         """
         Args:
@@ -734,19 +737,19 @@ class MarianEncoder(MarianPreTrainedModel):
             self.embed_tokens = embed_tokens
         else:
             self.embed_tokens = nn.Embedding(config.vocab_size, embed_dim, self.padding_idx)
-            # self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
-            self.embed_tokens.qconfig = None
+            self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
+            # self.embed_tokens.qconfig = None
 
         self.embed_positions = MarianSinusoidalPositionalEmbedding(
             config.max_position_embeddings,
             embed_dim,
             self.padding_idx,
         )
+        self.embed_positions.qconfig = float_qparams_weight_only_qconfig
+
         self.layers = nn.ModuleList([MarianEncoderLayer(config) for _ in range(config.encoder_layers)])
 
         self.gradient_checkpointing = False
-        # Initialize weights and apply final processing
-        self.post_init()
 
         self.mul_emb_scale = FloatFunctional()
         self.quant_in_emb = FloatFunctional()
@@ -754,15 +757,18 @@ class MarianEncoder(MarianPreTrainedModel):
         self.dropout_layer = nn.Dropout(self.dropout)
         self.quant_hidden = QuantStub()
 
+        # Initialize weights and apply final processing
+        self.post_init()
+
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        head_mask=None,
-        inputs_embeds=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            head_mask=None,
+            inputs_embeds=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:
@@ -873,7 +879,7 @@ class MarianEncoder(MarianPreTrainedModel):
                         layer_head_mask=(head_mask[idx] if head_mask is not None else None),
                         output_attentions=output_attentions,
                     )
-                #fixme na output vracie kvantizovane veci - treba dekvantizovat?
+                # fixme na output vracie kvantizovane veci - treba dekvantizovat?
                 hidden_states = layer_outputs[0]
 
             if output_attentions:
@@ -910,25 +916,28 @@ class MarianDecoder(MarianPreTrainedModel):
             self.embed_tokens = embed_tokens
         else:
             self.embed_tokens = nn.Embedding(config.vocab_size, config.d_model, self.padding_idx)
-            # self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
-            self.embed_tokens.qconfig = None
+            self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
+            # self.embed_tokens.qconfig = None
 
         self.embed_positions = MarianSinusoidalPositionalEmbedding(
             config.max_position_embeddings,
             config.d_model,
             self.padding_idx,
         )
+        self.embed_positions.qconfig = float_qparams_weight_only_qconfig
+
         self.layers = nn.ModuleList([MarianDecoderLayer(config) for _ in range(config.decoder_layers)])
 
         self.gradient_checkpointing = False
-        # Initialize weights and apply final processing
-        self.post_init()
 
         self.mul_embeds_scale = FloatFunctional()
         self.quant_in_embeds = QuantStub()
         self.add_inp_pos = FloatFunctional()
         self.quant_h_states = QuantStub()
         self.dropout_layer = nn.Dropout(self.dropout)
+
+        # Initialize weights and apply final processing
+        self.post_init()
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -956,19 +965,19 @@ class MarianDecoder(MarianPreTrainedModel):
         return combined_attention_mask
 
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        encoder_hidden_states=None, #kvantizovane
-        encoder_attention_mask=None,
-        head_mask=None,
-        cross_attn_head_mask=None,
-        past_key_values=None, #pouzivane spolu s use_cache
-        inputs_embeds=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            encoder_hidden_states=None,  # kvantizovane
+            encoder_attention_mask=None,
+            head_mask=None,
+            cross_attn_head_mask=None,
+            past_key_values=None,  # pouzivane spolu s use_cache
+            inputs_embeds=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:
@@ -1057,8 +1066,9 @@ class MarianDecoder(MarianPreTrainedModel):
         past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if inputs_embeds is None:
+            input_ids = input_ids.contiguous()
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
-            # input_ids.contiguous()
+
             # inputs_embeds = self.mul_embeds_scale.mul_scalar(self.embed_tokens(input_ids), self.embed_scale)
         # else:
         #     inputs_embeds = self.quant_in_embeds(inputs_embeds)
@@ -1185,8 +1195,8 @@ class MarianModel(MarianPreTrainedModel):
 
         padding_idx, vocab_size = config.pad_token_id, config.vocab_size
         self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
-        # self.shared.qconfig = float_qparams_weight_only_qconfig
-        self.shared.qconfig = None
+        self.shared.qconfig = float_qparams_weight_only_qconfig
+        # self.shared.qconfig = None
 
         self.encoder = MarianEncoder(config, self.shared)
         self.decoder = MarianDecoder(config, self.shared)
@@ -1211,22 +1221,22 @@ class MarianModel(MarianPreTrainedModel):
     @add_start_docstrings_to_model_forward(MARIAN_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=Seq2SeqModelOutput, config_class=_CONFIG_FOR_DOC)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        encoder_outputs=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            encoder_outputs=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            decoder_inputs_embeds=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Returns:
@@ -1296,7 +1306,7 @@ class MarianModel(MarianPreTrainedModel):
         if not return_dict:
             return decoder_outputs + encoder_outputs
 
-        #fixme mega dequant?
+        # fixme mega dequant?
 
         # return Seq2SeqModelOutput(
         #     last_hidden_state=decoder_outputs.last_hidden_state,
@@ -1345,12 +1355,13 @@ class MarianMTModel(MarianPreTrainedModel):
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         # self.lm_head.qconfig = None
-        # Initialize weights and apply final processing
-        self.post_init()
 
         self.add_lm_log = FloatFunctional()
         self.dequant_lm = DeQuantStub()
         self.quant_final_l_bias = QuantStub()
+
+        # Initialize weights and apply final processing
+        self.post_init()
 
     def get_encoder(self):
         return self.model.get_encoder()
@@ -1382,23 +1393,23 @@ class MarianMTModel(MarianPreTrainedModel):
     @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
     @add_end_docstrings(MARIAN_GENERATION_EXAMPLE)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        encoder_outputs=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
-        labels=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            encoder_outputs=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            decoder_inputs_embeds=None,
+            labels=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
@@ -1475,16 +1486,16 @@ class MarianMTModel(MarianPreTrainedModel):
         )
 
     def prepare_inputs_for_generation(
-        self,
-        decoder_input_ids,
-        past=None,
-        attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        use_cache=None,
-        encoder_outputs=None,
-        **kwargs
+            self,
+            decoder_input_ids,
+            past=None,
+            attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            use_cache=None,
+            encoder_outputs=None,
+            **kwargs
     ):
         # cut decoder_input_ids if past is used
         if past is not None:
@@ -1569,20 +1580,20 @@ class MarianForCausalLM(MarianPreTrainedModel):
 
     @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        head_mask=None,
-        cross_attn_head_mask=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        labels=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            head_mask=None,
+            cross_attn_head_mask=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            labels=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:

@@ -23,7 +23,7 @@ class Split(Enum):
 class Dataset():
 
     # FIXME maybe split is not needed
-    def __init__(self, dataset_name:str, lang1:str, lang2:str, split: Split, test_size:float, seed=1) -> None:
+    def __init__(self, dataset_name:str, lang1:str, lang2:str, split: Split, test_size:float, valid_size=40000, seed=1) -> None:
         self.dataset = self.load(dataset_name, lang1, lang2)
         self.name = dataset_name
         self.source_lang = lang1
@@ -32,6 +32,7 @@ class Dataset():
         self.split = split
         self.sets = None
         self.seed = seed
+        self.valid_size = valid_size
 
     def __getitem__(self, key):
         if self.sets is not None:
@@ -84,7 +85,9 @@ class Dataset():
 
         # RX = re.compile('([\\`/<>:"\|\?\*])')
 
-        dump_name = self.name + "_" + tokenizer.name_or_path + "_"+ tokenizer.source_lang + "-" +\
+        # dump_name = self.name + "_" + tokenizer.name_or_path + "_"+ tokenizer.source_lang + "-" +\
+        #             tokenizer.target_lang + "_preprocessed_dump"
+        dump_name = self.name + "_" + tokenizer.alias + "_" + tokenizer.source_lang + "-" + \
                     tokenizer.target_lang + "_preprocessed_dump"
         dump_name = re.sub(r'[\\`/<>:"|?*]', '-', dump_name)
         preprocessed_path = os.path.join(dir_path,"datasets","preprocessed_pickled", dump_name)

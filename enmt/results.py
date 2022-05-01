@@ -1,11 +1,9 @@
-import comet_ml
-
 from enum import Enum
 from transformers import Seq2SeqTrainer, TrainerCallback, Trainer, TrainingArguments, TrainerState, TrainerControl
 from transformers import Seq2SeqTrainingArguments
 from transformers.integrations import CometCallback
 
-from .qat_trainer import QatTrainingArgs, QatTrainer
+from .qat_trainer import QatTrainingArgs, QatTrainer, LogSeq2SeqTrainer
 from .dataset import Dataset
 from datasets import load_metric
 
@@ -15,6 +13,8 @@ from transformers.data.data_collator import DataCollatorForSeq2Seq
 from enmt.model_wrapper import ModelWrapper
 import numpy as np
 import torch
+import uuid
+import os
 
 
 class Scenario(Enum):
@@ -22,14 +22,16 @@ class Scenario(Enum):
 
     Args:
         Enum (EVAL): Evaluate provided model
-        #  Enum (TRAIN_EVAL): Train provided model and evaluate
+        Enum (TRAIN): Train provided model
+        Enum (FT_EVALL: Evaluate model on validation set before fine tuning
         Enum (QUANT_AWARE_TUNE_EVAL): Quantization-Aware fine-tuning of provided model and evaluation
-        # Enum (QUANT_AWARE_TRAIN_EVAL): Quantization-Aware training from scratch of provided model and evaluation
 
     """
-    EVAL = "evaluate"
-    # TRAIN_EVAL = "TRAIN_EVAL"
-    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE" # QAT uses modified training loop
+    EVAL = "EVALUATE"
+    TRAIN = "TRAIN_EVAL"
+    FT_EVAL = "FINE-TUNE_EVAL"
+    QUANT_AWARE_TUNE = "QUANT_AWARE_TUNE"  # QAT uses modified training loop
+    CALIBRATE = "CALIBRATE"
     # QUANT_AWARE_TRAIN_EVAL = "QUANT_AWARE_TRAIN_EVAL"
 
 
@@ -37,8 +39,7 @@ class Pipeline():
     """Pipeline class, implementing scenarios
     """
 
-    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset_train: Dataset = None,
-                 dataset_eval: Dataset = None,
+    def __init__(self, scenario: Scenario, model: ModelWrapper, dataset: Dataset = None,
                  training_args={'evaluation_strategy': 'epoch',
                                 'learning_rate': 2e-5,
                                 'per_device_train_batch_size': 4,
@@ -49,25 +50,53 @@ class Pipeline():
                                 'predict_with_generate': True,
                                 'no_cuda': True,
                                 'fp16': False,
-                                'push_to_hub': False}, callbacks: Optional[List[TrainerCallback]] = None):
+                                'push_to_hub': False},
+                 callbacks: Optional[List[TrainerCallback]] = None,
+                 metric_key_prefix: str = "eval"):
 
         # model_name = model_checkpoint.split("/")[-1]
+        self.metric_key_prefix = metric_key_prefix
         self.model = model.model
         self.tokenizer = model.tokenizer
         self.modelWrapper = model
-        self.metric = load_metric("sacrebleu")
         self.scenario = scenario
+
+        def name(x: str = "pipeline"): return x + "_" + uuid.uuid4().hex + "_" + self.scenario.value
+
+        if 'output_dir' not in training_args.keys():
+            print("Pipeline: output_dir not specified. Generating unique...")
+            dir = ""
+            while True:
+                dir = name()
+                if not os.path.isdir(dir):
+                    break
+
+            training_args['output_dir'] = dir
+
+        else:
+            dir = training_args['output_dir']
+            while True:
+                if not os.path.isdir(dir):
+                    break
+                dir = name(training_args['output_dir'])
+
+            training_args['output_dir'] = dir
+
+        self.metric = load_metric("sacrebleu", cache_dir=os.path.join(training_args['output_dir'],'cache'))
+
+
+        print("output_dir for Pipeline is: ", training_args['output_dir'])
 
         if scenario == Scenario.QUANT_AWARE_TUNE:
             # training_args['evaluation_strategy'] = "no"
             # print("evaluation strategy not supported for QAT, yet...")
             self.training_args = QatTrainingArgs(
-                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                # output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
                 **training_args
             )
         else:
             self.training_args = Seq2SeqTrainingArguments(
-                output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
+                # output_dir=model.pretrained_model_name_or_path + "_" + scenario.value,
                 **training_args
             )
 
@@ -76,38 +105,81 @@ class Pipeline():
 
         self.config = self.model.config.to_dict()
 
-        if dataset_eval is not None:
-            dataset_eval.preprocess(
+        if dataset is not None:
+            dataset.preprocess(
                 tokenizer=self.tokenizer,
                 max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
-        if dataset_train is not None:
-            dataset_train.preprocess(
-                tokenizer=self.tokenizer,
-                max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
+        # if dataset is not None:
+        #     dataset.preprocess(
+        #         tokenizer=self.tokenizer,
+        #         max_input_length=self.config['max_length'], max_target_length=self.config['max_length'], prefix="")
 
         # if training_args['predict_with_generate'] == True:
         #     compute_metrics =  self._compute_metrics_generate
         # else:
         #     compute_metrics = self._compute_metrics_predict
 
+        if scenario == Scenario.QUANT_AWARE_TUNE or scenario.TRAIN:
+            if "train" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'train' split")
+            if "val" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'val' split")
+
+        if scenario == Scenario.CALIBRATE:
+            if "train" not in dataset.sets:
+                raise RuntimeError("Dataset does not have 'train' split")
+
         if scenario == Scenario.QUANT_AWARE_TUNE:
             self.trainer = QatTrainer(
                 self.model,
                 self.training_args,
-                train_dataset=dataset_train['train'] if dataset_train is not None else None,
-                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
                 callbacks=callbacks
             )
-        else:
-            self.trainer = Seq2SeqTrainer(
+        elif scenario == Scenario.TRAIN:
+            self.trainer = LogSeq2SeqTrainer(
                 self.model,
                 self.training_args,
-                train_dataset=dataset_train['train'] if dataset_train is not None else None,
-                eval_dataset=dataset_eval['test'] if dataset_eval is not None else None,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
+        elif scenario == Scenario.EVAL:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['test'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
+        elif scenario == Scenario.FT_EVAL:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=dataset['train'],
+                eval_dataset=dataset['val'],
+                data_collator=data_collator,
+                tokenizer=self.tokenizer,
+                compute_metrics=self._compute_metrics,
+                callbacks=callbacks
+            )
+        elif scenario == Scenario.CALIBRATE:
+            self.trainer = LogSeq2SeqTrainer(
+                self.model,
+                self.training_args,
+                train_dataset=None,
+                eval_dataset=dataset['train'],
                 data_collator=data_collator,
                 tokenizer=self.tokenizer,
                 compute_metrics=self._compute_metrics,
@@ -124,10 +196,10 @@ class Pipeline():
         scenario = self.scenario
         print(f"Pipeline running with {scenario}...")
 
-        if scenario == Scenario.EVAL:
-            print(self.trainer.evaluate())
+        if scenario in [Scenario.EVAL, Scenario.FT_EVAL, Scenario.CALIBRATE]:
+            print(self.trainer.evaluate(metric_key_prefix= self.metric_key_prefix))
 
-        elif scenario == Scenario.QUANT_AWARE_TUNE:
+        elif scenario == Scenario.QUANT_AWARE_TUNE or scenario == Scenario.TRAIN:
 
             resume = False if self.training_args.resume_from_checkpoint is None \
                 else self.training_args.resume_from_checkpoint
@@ -206,8 +278,3 @@ class Pipeline():
 class Comparator():
     def __init__(self, results: List[Pipeline]) -> None:
         pass
-
-
-
-
-

@@ -17,13 +17,22 @@ Vystup prace by mal byt:
 
 ## Notes
 
-Does not work *as is* yet...
+* Directory enmt/modified_transformers_files
+    * this directory contains modified files of Transformers lib
+    * modeling_marian_quant* are quantizable Marian Models - support Static Quant. and Quant.-Aware Training
+ 
+* in some cases it is needed to have **PyTorch installed ahead of this repo**
 
-Directory enmt/modified_transformers_files should not be used when running. 
-It is only storage for modified files of editable transformers installation.
+
+## Reproducing results:
+
+Scripts with prefix `runner` are scripts from our experiments.
+You can run them to reproduce results.
 
 
-## Evaluation of pretrained model 
+## Prototypes:
+
+### Evaluation of pretrained model 
 [Jupyter notebook](examples/train_and_eval/eval_pretrained.ipynb)
 
 INT8 quantized model(MarianMT) has nearly same BLEU score and is 1.7times faster than in FP

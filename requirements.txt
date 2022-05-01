@@ -66,8 +66,8 @@ pyparsing==2.4.7
 pyrsistent==0.18.0
 python-dateutil==2.8.2
 pytz==2021.3
-# pywin32==302
-# pywinpty==1.1.4
+pywin32==302
+pywinpty==1.1.4
 PyYAML==6.0
 pyzmq==22.3.0
 regex==2021.10.8
@@ -84,11 +84,11 @@ terminado==0.12.1
 testpath==0.5.0
 tokenizers==0.10.3
 toml==0.10.2
-# torch==1.11.0.dev20210929+cu102
+torch==1.11.0.dev20210929+cu102
 tornado==6.1
 tqdm==4.62.3
 traitlets==5.1.0
-# -e git+https://github.com/huggingface/transformers.git@c43749289de6e38a37240b31bec804700e70d2f4#egg=transformers
+-e git+https://github.com/huggingface/transformers.git@c43749289de6e38a37240b31bec804700e70d2f4#egg=transformers
 typing-extensions==3.10.0.2
 urllib3==1.26.7
 wcwidth==0.2.5

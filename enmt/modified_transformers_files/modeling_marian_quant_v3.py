@@ -13,7 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """PyTorch MarianMTModel model, ported from the Marian C++ repo."""
+from torch.ao.quantization.observer import MinMaxObserver, default_observer
+from torch.ao.quantization.qconfig import QConfig
 
+"""Modified implementation to support QAT
+        * ReLU activation hardcoded instead of SiLU
+            * reduction of dequant operations
+            * activation from config is therefore ignored
+        * dynamicaly quantized embeddings - quantize Embedding weights, activations (output) stay FP32
+        * check bmm? 
+"""
 
 import copy
 import math
@@ -24,11 +33,11 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 from torch import nn
+from torch.ao.quantization import float_qparams_weight_only_qconfig
 from torch.ao.quantization.stubs import QuantStub, DeQuantStub
 from torch.nn import CrossEntropyLoss
-from torch.nn import quantized
+from torch.nn.quantized import FloatFunctional
 
-from ...activations import ACT2FN
 from ...file_utils import (
     add_end_docstrings,
     add_start_docstrings,
@@ -46,13 +55,11 @@ from ...modeling_utils import PreTrainedModel
 from ...utils import logging
 from .configuration_marian import MarianConfig
 
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "MarianConfig"
 _TOKENIZER_FOR_DOC = "MarianTokenizer"
 _CHECKPOINT_FOR_DOC = "Helsinki-NLP/opus-mt-en-de"
-
 
 MARIAN_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "Helsinki-NLP/opus-mt-en-de",
@@ -147,12 +154,12 @@ class MarianAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int,
-        dropout: float = 0.0,
-        is_decoder: bool = False,
-        bias: bool = True,
+            self,
+            embed_dim: int,
+            num_heads: int,
+            dropout: float = 0.0,
+            is_decoder: bool = False,
+            bias: bool = True,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -173,25 +180,30 @@ class MarianAttention(nn.Module):
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
 
-        self.mul_hidden_scaling = quantized.FloatFunctional()
-        self.mul_bmm = quantized.FloatFunctional()
-        self.add_weight_mask = quantized.FloatFunctional()
-        self.softmax = nn.Softmax(dim=-1)
-        self.mul_lh_mask_att_weights = quantized.FloatFunctional()
-        self.dropout_attn = nn.Dropout(p=self.dropout)
-        self.mul_bmm_attn_probs_value_states = quantized.FloatFunctional()
+        self.mul_q_scaling = FloatFunctional()
+        self.dequant_q_states = DeQuantStub()
+        self.dequant_k_states = DeQuantStub()
+        self.quant_bmm = QuantStub()
+        self.softmax_layer = nn.Softmax(dim=-1)
+        self.dropout_layer = nn.Dropout(self.dropout)
+        self.dequant_attn_p = DeQuantStub()
+        self.dequant_v_states = DeQuantStub()
+        self.quant_bmm2 = QuantStub()
+        # self.quant_value_states = QuantStub()
+        # self.quant_key_states = QuantStub()
+        # self.quant_key_value_states = QuantStub()
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
         return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        key_value_states: Optional[torch.Tensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
+            self,
+            hidden_states: torch.Tensor,  # kvantizovane od encodera
+            key_value_states: Optional[torch.Tensor] = None,  # fixme kvantizovat??
+            past_key_value: Optional[Tuple[torch.Tensor]] = None,  # fixme kvantizovat??
+            attention_mask: Optional[torch.Tensor] = None,
+            layer_head_mask: Optional[torch.Tensor] = None,
+            output_attentions: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         """Input shape: Batch x Time x Channel"""
 
@@ -203,14 +215,24 @@ class MarianAttention(nn.Module):
 
         # get query proj
         # query_states = self.q_proj(hidden_states) * self.scaling
-        query_states = self.mul_hidden_scaling.mul_scalar(self.q_proj(hidden_states), self.scaling)
+        query_states = self.mul_q_scaling.mul_scalar(self.q_proj(hidden_states), self.scaling)
+
         # get key, value proj
         if is_cross_attention and past_key_value is not None:
             # reuse k,v, cross_attentions
+            # key_states = past_key_value[0]
+            # value_states = past_key_value[1]
+            # p0 = self.quant_key_states(past_key_value[0])
+            # p1 = self.quant_value_states(past_key_value[1])
+            # past_key_value = (p0, p1)
+            # key_states = self.dequant_key_states(past_key_value[0])
+            # value_states = self.dequant_value_states(past_key_value[1])
             key_states = past_key_value[0]
             value_states = past_key_value[1]
         elif is_cross_attention:
             # cross_attentions
+            # fixme key_value_states asi niesu kvantizovane, ked sa deje is_cross_attention
+            # key_value_states = self.quant_key_value_states(key_value_states)
             key_states = self._shape(self.k_proj(key_value_states), -1, bsz)
             value_states = self._shape(self.v_proj(key_value_states), -1, bsz)
         elif past_key_value is not None:
@@ -240,9 +262,9 @@ class MarianAttention(nn.Module):
         value_states = value_states.view(*proj_shape)
 
         src_len = key_states.size(1)
+        # fixme bmm unsuported quantization
         # attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
-
-        attn_weights = self.mul_bmm.mul(query_states, key_states.transpose(1, 2))
+        attn_weights = torch.bmm(self.dequant_q_states(query_states), self.dequant_k_states(key_states.transpose(1, 2)))
 
         if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
             raise ValueError(
@@ -254,20 +276,19 @@ class MarianAttention(nn.Module):
                 raise ValueError(
                     f"Attention mask should be of size {(bsz, 1, tgt_len, src_len)}, but is {attention_mask.size()}"
                 )
-            # attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
-            attn_weights = self.add_weight_mask(self.attn_weights.view(bsz, self.num_heads, tgt_len, src_len), attention_mask)
+            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
         # attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-        attn_weights = self.softmax(attn_weights)
+        attn_weights = self.softmax_layer(attn_weights)
+        attn_weights = self.quant_bmm(attn_weights)
 
         if layer_head_mask is not None:
             if layer_head_mask.size() != (self.num_heads,):
                 raise ValueError(
                     f"Head mask for a single layer should be of size {(self.num_heads,)}, but is {layer_head_mask.size()}"
                 )
-            # attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = self.mul_lh_mask_att_weights(self.layer_head_mask.view(1, -1, 1, 1), attn_weights.view(bsz, self.num_heads, tgt_len, src_len))
+            attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
         if output_attentions:
@@ -281,10 +302,10 @@ class MarianAttention(nn.Module):
             attn_weights_reshaped = None
 
         # attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
-        attn_probs = self.dropout_attn(attn_weights)
+        attn_probs = self.dropout_layer(attn_weights)
 
         # attn_output = torch.bmm(attn_probs, value_states)
-        attn_output = self.mul_bmm_attn_probs_value_states.mul(attn_probs, value_states)
+        attn_output = self.quant_bmm2(torch.bmm(self.dequant_attn_p(attn_probs), self.dequant_v_states(value_states)))
 
         if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
             raise ValueError(
@@ -322,19 +343,20 @@ class MarianEncoderLayer(nn.Module):
         self.fc2 = nn.Linear(config.encoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = nn.LayerNorm(self.embed_dim)
 
-        self.dropout_hs1 = nn.Dropout(self.dropout)
-        self.add_res_hs1 = quantized.FloatFunctional()
-        self.dropout_hs_act = nn.Dropout(self.activation_dropout)
-        self.dropout_hs2 = nn.Dropout(self.dropout)
-        self.add_res_hs2 = quantized.FloatFunctional()
-
+        self.dropout_layer1 = nn.Dropout(self.dropout)
+        self.dropout_layer2 = nn.Dropout(self.activation_dropout)
+        self.dropout_layer3 = nn.Dropout(self.dropout)
+        # self.quant_silu = QuantStub()
+        # self.dequant_silu = DeQuantStub()
+        self.add_h_r1 = FloatFunctional()
+        self.add_h_r2 = FloatFunctional()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor, #kvantizovany input
-        attention_mask: torch.Tensor,
-        layer_head_mask: torch.Tensor,
-        output_attentions: bool = False,
+            self,
+            hidden_states: torch.Tensor,
+            attention_mask: torch.Tensor,
+            layer_head_mask: torch.Tensor,
+            output_attentions: bool = False,
     ):
         """
         Args:
@@ -355,26 +377,28 @@ class MarianEncoderLayer(nn.Module):
             output_attentions=output_attentions,
         )
         # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = self.dropout_hs1(hidden_states)
+        hidden_states = self.dropout_layer1(hidden_states)
+
         # hidden_states = residual + hidden_states
-        hidden_states = self.add_res_hs1.add(residual,hidden_states)
+        hidden_states = self.add_h_r1.add(residual, hidden_states)
         hidden_states = self.self_attn_layer_norm(hidden_states)
 
         residual = hidden_states
-        # TODO hardcoded ReLU here...
+        # fixme aktivacna funkcia - vymenit SiLU za ReLU/GeLU?? - teraz viem len de/quant
+        # hidden_states = self.activation_fn(self.fc1(hidden_states))
+        # hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
         hidden_states = self.activation_fn(self.fc1(hidden_states))
         # hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
-        hidden_states = self.dropout_hs_act(hidden_states)
+        hidden_states = self.dropout_layer2(hidden_states)
         hidden_states = self.fc2(hidden_states)
-        # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = self.dropout_hs2(hidden_states)
+        hidden_states = self.dropout_layer3(hidden_states)
         # hidden_states = residual + hidden_states
-        hidden_states = self.add_res_hs2.add(residual, hidden_states)
-
+        hidden_states = self.add_h_r2.add(residual, hidden_states)
         hidden_states = self.final_layer_norm(hidden_states)
 
+        # fixme je tuto treba nieco robit?
         if hidden_states.dtype == torch.float16 and (
-            torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
+                torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()
         ):
             clamp_value = torch.finfo(hidden_states.dtype).max - 1000
             hidden_states = torch.clamp(hidden_states, min=-clamp_value, max=clamp_value)
@@ -400,7 +424,8 @@ class MarianDecoderLayer(nn.Module):
             is_decoder=True,
         )
         self.dropout = config.dropout
-        self.activation_fn = ACT2FN[config.activation_function]
+        # self.activation_fn = ACT2FN[config.activation_function]
+        self.activation_fn = nn.ReLU()
         self.activation_dropout = config.activation_dropout
 
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
@@ -415,17 +440,27 @@ class MarianDecoderLayer(nn.Module):
         self.fc2 = nn.Linear(config.decoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = nn.LayerNorm(self.embed_dim)
 
+        self.dropout_layer = nn.Dropout(self.dropout)
+        self.dropout_layer_cross = nn.Dropout(self.dropout)
+        # self.dequant_silu = DeQuantStub()
+        # self.quant_silu = QuantStub()
+        self.dropout_fc_act = nn.Dropout(self.activation_dropout)
+        self.dropout_fc = nn.Dropout(self.dropout)
+        self.add_r_h1 = FloatFunctional()
+        self.add_r_h2 = FloatFunctional()
+        self.add_r_h3 = FloatFunctional()
+
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        encoder_hidden_states: Optional[torch.Tensor] = None,
-        encoder_attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        output_attentions: Optional[bool] = False,
-        use_cache: Optional[bool] = True,
+            self,
+            hidden_states: torch.Tensor,  # kvantizovane
+            attention_mask: Optional[torch.Tensor] = None,
+            encoder_hidden_states: Optional[torch.Tensor] = None,  # kvantizovane
+            encoder_attention_mask: Optional[torch.Tensor] = None,
+            layer_head_mask: Optional[torch.Tensor] = None,
+            cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
+            past_key_value: Optional[Tuple[torch.Tensor]] = None,  # kvantizovane asi - use_cache
+            output_attentions: Optional[bool] = False,
+            use_cache: Optional[bool] = True,
     ):
         """
         Args:
@@ -458,8 +493,10 @@ class MarianDecoderLayer(nn.Module):
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
         )
-        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = residual + hidden_states
+        # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        hidden_states = self.dropout_layer(hidden_states)
+        # hidden_states = residual + hidden_states
+        hidden_states = self.add_r_h1.add(residual, hidden_states)
         hidden_states = self.self_attn_layer_norm(hidden_states)
 
         # Cross-Attention Block
@@ -478,8 +515,10 @@ class MarianDecoderLayer(nn.Module):
                 past_key_value=cross_attn_past_key_value,
                 output_attentions=output_attentions,
             )
-            hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-            hidden_states = residual + hidden_states
+            # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = self.dropout_layer_cross(hidden_states)
+            # hidden_states = residual + hidden_states
+            hidden_states = self.add_r_h2.add(residual, hidden_states)
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
 
             # add cross-attn to positions 3,4 of present_key_value tuple
@@ -488,16 +527,20 @@ class MarianDecoderLayer(nn.Module):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
-        hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+        # hidden_states = self.quant_silu(self.activation_fn(self.dequant_silu(self.fc1(hidden_states))))
+        # hidden_states = self.activation_fn(self.fc1(hidden_states))
+        # hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+        hidden_states = self.dropout_fc_act(hidden_states)
         hidden_states = self.fc2(hidden_states)
-        hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = residual + hidden_states
+        # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
+        hidden_states = self.dropout_fc(hidden_states)
+        # hidden_states = residual + hidden_states
+        hidden_states = self.add_r_h3.add(residual, hidden_states)
         hidden_states = self.final_layer_norm(hidden_states)
 
         outputs = (hidden_states,)
 
         if output_attentions:
-            # tieto dve podavat dekvantizovane
             outputs += (self_attn_weights, cross_attn_weights)
 
         if use_cache:
@@ -673,7 +716,6 @@ MARIAN_INPUTS_DOCSTRING = r"""
 
 class MarianEncoder(MarianPreTrainedModel):
     """
-    RETURNS ALL DEQUANTIZED
     Transformer encoder consisting of *config.encoder_layers* self attention layers. Each layer is a
     [`MarianEncoderLayer`].
 
@@ -697,37 +739,38 @@ class MarianEncoder(MarianPreTrainedModel):
             self.embed_tokens = embed_tokens
         else:
             self.embed_tokens = nn.Embedding(config.vocab_size, embed_dim, self.padding_idx)
+            self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
+            # self.embed_tokens.qconfig = None
 
         self.embed_positions = MarianSinusoidalPositionalEmbedding(
             config.max_position_embeddings,
             embed_dim,
             self.padding_idx,
         )
+        self.embed_positions.qconfig = float_qparams_weight_only_qconfig
+
         self.layers = nn.ModuleList([MarianEncoderLayer(config) for _ in range(config.encoder_layers)])
 
         self.gradient_checkpointing = False
 
-        self.quant_in_emb = QuantStub()
-        self.mul_embeds_scale = quantized.FloatFunctional()
-        self.add_embeds_pos = quantized.FloatFunctional()
-        # self.quant_hidden = QuantStub()
-        self.dropout_hidden = nn.Dropout(self.dropout)
-        self.dequant_hs_cache = DeQuantStub()
-        self.dequant_lout_cache = DeQuantStub()
+        # self.mul_emb_scale = FloatFunctional()
+        # self.quant_in_emb = FloatFunctional()
+        # self.add_emb_pos = FloatFunctional()
+        self.dropout_layer = nn.Dropout(self.dropout)
+        self.quant_hidden = QuantStub()
 
         # Initialize weights and apply final processing
         self.post_init()
 
-
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        head_mask=None,
-        inputs_embeds=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            head_mask=None,
+            inputs_embeds=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:
@@ -783,22 +826,18 @@ class MarianEncoder(MarianPreTrainedModel):
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
         if inputs_embeds is None:
-            # inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
-            # input_ids nemozu byt kvantizovane...
-            inputs_embeds = self.mul_embeds_scale.mul_scalar(self.embed_tokens(input_ids), self.embed_scale)
-        else:
-            inputs_embeds = self.quant_in_emb(inputs_embeds)
+            inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
+            # inputs_embeds = self.mul_emb_scale.mul_scalar(self.embed_tokens(input_ids), self.embed_scale)
+        # else:
+        #     inputs_embeds = self.quant_in_emb(inputs_embeds)
 
-        # input_shape nemoze byt kvantizovany
         embed_pos = self.embed_positions(input_shape)
 
-        # embed_pos nemoze byt kvantizovany
-        # hidden_states = inputs_embeds + embed_pos
-
-        hidden_states = self.add_embeds_pos(inputs_embeds, embed_pos)
-
+        hidden_states = inputs_embeds + embed_pos
+        # hidden_states = self.add_emb_pos.add(inputs_embeds, embed_pos)
         # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = self.dropout_hidden(hidden_states)
+        hidden_states = self.quant_hidden(hidden_states)
+        hidden_states = self.dropout_layer(hidden_states)
 
         # expand attention_mask
         if attention_mask is not None:
@@ -815,9 +854,7 @@ class MarianEncoder(MarianPreTrainedModel):
             ), f"The head_mask should be specified for {len(self.layers)} layers, but it is for {head_mask.size()[0]}."
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
-
-                # encoder_states = encoder_states + (hidden_states,)
-                encoder_states = encoder_states + (self.dequant_hs_cache(hidden_states),)
+                encoder_states = encoder_states + (hidden_states,)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = random.uniform(0, 1)
             if self.training and (dropout_probability < self.layerdrop):  # skip the layer
@@ -844,16 +881,11 @@ class MarianEncoder(MarianPreTrainedModel):
                         layer_head_mask=(head_mask[idx] if head_mask is not None else None),
                         output_attentions=output_attentions,
                     )
-
+                # fixme na output vracie kvantizovane veci - treba dekvantizovat?
                 hidden_states = layer_outputs[0]
 
-
             if output_attentions:
-
-                # all_attentions = all_attentions + (layer_outputs[1],)
-                all_attentions = all_attentions + (self.dequant_lout_cache(layer_outputs[1]),)
-
-        hidden_states = self.dequant_hs_cache(hidden_states)
+                all_attentions = all_attentions + (layer_outputs[1],)
 
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
@@ -886,23 +918,25 @@ class MarianDecoder(MarianPreTrainedModel):
             self.embed_tokens = embed_tokens
         else:
             self.embed_tokens = nn.Embedding(config.vocab_size, config.d_model, self.padding_idx)
+            self.embed_tokens.qconfig = float_qparams_weight_only_qconfig
+            # self.embed_tokens.qconfig = None
 
         self.embed_positions = MarianSinusoidalPositionalEmbedding(
             config.max_position_embeddings,
             config.d_model,
             self.padding_idx,
         )
+        self.embed_positions.qconfig = float_qparams_weight_only_qconfig
+
         self.layers = nn.ModuleList([MarianDecoderLayer(config) for _ in range(config.decoder_layers)])
 
         self.gradient_checkpointing = False
 
-        self.quant_in_embeds = QuantStub()
-        self.add_inp_pos = quantized.FloatFunctional()
-        self.dropout_hs_in = nn.Dropout(self.dropout)
-        self.dequant_hs_out = DeQuantStub()
-        self.dequant_past_key_val = DeQuantStub()
-        self.dequant_all_out = DeQuantStub()
-
+        # self.mul_embeds_scale = FloatFunctional()
+        # self.quant_in_embeds = QuantStub()
+        # self.add_inp_pos = FloatFunctional()
+        self.quant_h_states = QuantStub()
+        self.dropout_layer = nn.Dropout(self.dropout)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -933,19 +967,19 @@ class MarianDecoder(MarianPreTrainedModel):
         return combined_attention_mask
 
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        encoder_hidden_states=None, # dekvantizovane
-        encoder_attention_mask=None,
-        head_mask=None,
-        cross_attn_head_mask=None,
-        past_key_values=None, #dekvantizovane
-        inputs_embeds=None, #dekvantizovane - musim si kvantizovat
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            encoder_hidden_states=None,  # kvantizovane
+            encoder_attention_mask=None,
+            head_mask=None,
+            cross_attn_head_mask=None,
+            past_key_values=None,  # pouzivane spolu s use_cache
+            inputs_embeds=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:
@@ -1034,9 +1068,12 @@ class MarianDecoder(MarianPreTrainedModel):
         past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if inputs_embeds is None:
+            input_ids = input_ids.contiguous()
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
-        else:
-            inputs_embeds = self.quant_in_embeds(inputs_embeds)
+
+            # inputs_embeds = self.mul_embeds_scale.mul_scalar(self.embed_tokens(input_ids), self.embed_scale)
+        # else:
+        #     inputs_embeds = self.quant_in_embeds(inputs_embeds)
 
         attention_mask = self._prepare_decoder_attention_mask(
             attention_mask, input_shape, inputs_embeds, past_key_values_length
@@ -1050,12 +1087,12 @@ class MarianDecoder(MarianPreTrainedModel):
         # embed positions
         positions = self.embed_positions(input_shape, past_key_values_length)
 
-        # hidden_states = inputs_embeds + positions
-        # TODO positions neviem ci ma byt kvantizovane
-        hidden_states = self.add_inp_pos.add(inputs_embeds, positions)
+        hidden_states = inputs_embeds + positions
+        # hidden_states = self.add_inp_pos.add(inputs_embeds, positions)
+        hidden_states = self.quant_h_states(hidden_states)
 
         # hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = self.dropout_hs_in(hidden_states)
+        hidden_states = self.dropout_layer(hidden_states)
 
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
@@ -1072,19 +1109,12 @@ class MarianDecoder(MarianPreTrainedModel):
         for idx, decoder_layer in enumerate(self.layers):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             if output_hidden_states:
-                # all_hidden_states += (hidden_states,)
-                # TODO dequant index?
-                all_hidden_states += (self.dequant_hs_out(hidden_states),)
+                all_hidden_states += (hidden_states,)
             dropout_probability = random.uniform(0, 1)
             if self.training and (dropout_probability < self.layerdrop):
                 continue
 
-            # past_key_value = past_key_values[idx] if past_key_values is not None else None
-
-            if past_key_values is not None:
-                past_key_value = self.dequant_past_key_val(past_key_values[idx])
-            else:
-                past_key_value = None
+            past_key_value = past_key_values[idx] if past_key_values is not None else None
 
             if self.gradient_checkpointing and self.training:
 
@@ -1132,11 +1162,9 @@ class MarianDecoder(MarianPreTrainedModel):
                 next_decoder_cache += (layer_outputs[3 if output_attentions else 1],)
 
             if output_attentions:
-                # all_self_attns += (layer_outputs[1],)
-                all_self_attns += (self.dequant_all_out(layer_outputs[1]),)
+                all_self_attns += (layer_outputs[1],)
 
                 if encoder_hidden_states is not None:
-
                     all_cross_attentions += (layer_outputs[2],)
 
         # add hidden states from the last decoder layer
@@ -1169,6 +1197,8 @@ class MarianModel(MarianPreTrainedModel):
 
         padding_idx, vocab_size = config.pad_token_id, config.vocab_size
         self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
+        self.shared.qconfig = float_qparams_weight_only_qconfig
+        # self.shared.qconfig = None
 
         self.encoder = MarianEncoder(config, self.shared)
         self.decoder = MarianDecoder(config, self.shared)
@@ -1193,22 +1223,22 @@ class MarianModel(MarianPreTrainedModel):
     @add_start_docstrings_to_model_forward(MARIAN_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=Seq2SeqModelOutput, config_class=_CONFIG_FOR_DOC)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        encoder_outputs=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            encoder_outputs=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            decoder_inputs_embeds=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Returns:
@@ -1274,8 +1304,22 @@ class MarianModel(MarianPreTrainedModel):
             return_dict=return_dict,
         )
 
+        # fixme mega dequant?
         if not return_dict:
             return decoder_outputs + encoder_outputs
+
+        # fixme mega dequant?
+
+        # return Seq2SeqModelOutput(
+        #     last_hidden_state=decoder_outputs.last_hidden_state,
+        #     past_key_values=decoder_outputs.past_key_values,
+        #     decoder_hidden_states=decoder_outputs.hidden_states,
+        #     decoder_attentions=decoder_outputs.attentions,
+        #     cross_attentions=decoder_outputs.cross_attentions,
+        #     encoder_last_hidden_state=encoder_outputs.last_hidden_state,
+        #     encoder_hidden_states=encoder_outputs.hidden_states,
+        #     encoder_attentions=encoder_outputs.attentions,
+        # )
 
         return Seq2SeqModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
@@ -1312,6 +1356,11 @@ class MarianMTModel(MarianPreTrainedModel):
         self.model = MarianModel(config)
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
+        # self.lm_head.qconfig = None
+
+        # self.add_lm_log = FloatFunctional()
+        self.dequant_lm = DeQuantStub()
+        # self.quant_final_l_bias = QuantStub()
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1346,23 +1395,23 @@ class MarianMTModel(MarianPreTrainedModel):
     @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
     @add_end_docstrings(MARIAN_GENERATION_EXAMPLE)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        encoder_outputs=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
-        labels=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            encoder_outputs=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            decoder_inputs_embeds=None,
+            labels=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
@@ -1398,7 +1447,24 @@ class MarianMTModel(MarianPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
+        # out = self.dequant_lm(outputs[0])
+        # lm_logits = self.lm_head(outputs[0]) + self.final_logits_bias
+        # lm_logits = self.lm_head(out) + self.final_logits_bias
+        # out = self.lm_head(outputs[0])
+        # final = self.quant_final_l_bias(self.final_logits_bias)
+        # lm_logits = self.add_lm_log.add(out,final)
+        # lm_logits = self.dequant_lm(lm_logits)
+        head = self.dequant_lm(self.lm_head(outputs[0]))
+        lm_logits = head + self.final_logits_bias
+
+        # outputs.past_key_values
+        # outputs.decoder_hidden_states = outputs.decoder_hidden_states
+        # outputs.decoder_attentions = outputs.decoder_attentions
+        # outputs.cross_attentions = outputs.cross_attentions
+        # outputs.encoder_last_hidden_state = self.dequant_outputs1(outputs.last_hidden_state)
+        # outputs.encoder_hidden_states = self.dequant_outputs1(outputs.encoder_hidden_states)
+        # outputs.encoder_attentions = outputs.encoder_attentions
+        # outputs[0] = self.dequant_outputs1(outputs[0])
 
         masked_lm_loss = None
         if labels is not None:
@@ -1422,16 +1488,16 @@ class MarianMTModel(MarianPreTrainedModel):
         )
 
     def prepare_inputs_for_generation(
-        self,
-        decoder_input_ids,
-        past=None,
-        attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        use_cache=None,
-        encoder_outputs=None,
-        **kwargs
+            self,
+            decoder_input_ids,
+            past=None,
+            attention_mask=None,
+            head_mask=None,
+            decoder_head_mask=None,
+            cross_attn_head_mask=None,
+            use_cache=None,
+            encoder_outputs=None,
+            **kwargs
     ):
         # cut decoder_input_ids if past is used
         if past is not None:
@@ -1516,20 +1582,20 @@ class MarianForCausalLM(MarianPreTrainedModel):
 
     @replace_return_docstrings(output_type=CausalLMOutputWithCrossAttentions, config_class=_CONFIG_FOR_DOC)
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        head_mask=None,
-        cross_attn_head_mask=None,
-        past_key_values=None,
-        inputs_embeds=None,
-        labels=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+            self,
+            input_ids=None,
+            attention_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            head_mask=None,
+            cross_attn_head_mask=None,
+            past_key_values=None,
+            inputs_embeds=None,
+            labels=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None,
     ):
         r"""
         Args:

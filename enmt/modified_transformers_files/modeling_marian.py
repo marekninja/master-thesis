@@ -745,14 +745,16 @@ class MarianEncoder(MarianPreTrainedModel):
         self.layers = nn.ModuleList([MarianEncoderLayer(config) for _ in range(config.encoder_layers)])
 
         self.gradient_checkpointing = False
-        # Initialize weights and apply final processing
-        self.post_init()
+
 
         self.mul_emb_scale = FloatFunctional()
         self.quant_in_emb = FloatFunctional()
         self.add_emb_pos = FloatFunctional()
         self.dropout_layer = nn.Dropout(self.dropout)
         self.quant_hidden = QuantStub()
+
+        # Initialize weights and apply final processing
+        self.post_init()
 
     def forward(
         self,
@@ -921,14 +923,16 @@ class MarianDecoder(MarianPreTrainedModel):
         self.layers = nn.ModuleList([MarianDecoderLayer(config) for _ in range(config.decoder_layers)])
 
         self.gradient_checkpointing = False
-        # Initialize weights and apply final processing
-        self.post_init()
+
 
         self.mul_embeds_scale = FloatFunctional()
         self.quant_in_embeds = QuantStub()
         self.add_inp_pos = FloatFunctional()
         self.quant_h_states = QuantStub()
         self.dropout_layer = nn.Dropout(self.dropout)
+
+        # Initialize weights and apply final processing
+        self.post_init()
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -1334,6 +1338,7 @@ class MarianMTModel(MarianPreTrainedModel):
         r"embed_positions",
     ]
 
+
     _keys_to_ignore_on_save = [
         "model.encoder.embed_positions.weight",
         "model.decoder.embed_positions.weight",
@@ -1345,12 +1350,14 @@ class MarianMTModel(MarianPreTrainedModel):
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         # self.lm_head.qconfig = None
-        # Initialize weights and apply final processing
-        self.post_init()
+
 
         self.add_lm_log = FloatFunctional()
         self.dequant_lm = DeQuantStub()
         self.quant_final_l_bias = QuantStub()
+
+        # Initialize weights and apply final processing
+        self.post_init()
 
     def get_encoder(self):
         return self.model.get_encoder()

@@ -14,8 +14,8 @@ class ModelWrapper():
     *   creation of quantized model
     """
 
-    def __init__(self, pretrained_model_name_or_path: str, model=None, tokenizer=None, isQuantized=None) -> None:
-        """Init of pretrained HF model and tokenizer.
+    def __init__(self, pretrained_model_name_or_path: str, seed=42, pretrained_tokenizer_name_or_path=None, model=None, tokenizer=None, isQuantized=None) -> None:
+        """Init of pretrained HF model and tokenizer. Supports Helsinki-NLP-opus-mt-en-sk MarianMT model. Some things are hardcoded...
 
         Args:
             pretrained_model_name_or_path (str): Name of the model from the HF hub
@@ -28,10 +28,19 @@ class ModelWrapper():
 
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 pretrained_model_name_or_path)
+
+            if pretrained_tokenizer_name_or_path is None:
+                pretrained_tokenizer_name_or_path = pretrained_model_name_or_path
+
             self.tokenizer = AutoTokenizer.from_pretrained(
-                pretrained_model_name_or_path)
+                pretrained_tokenizer_name_or_path)
+            self.tokenizer.alias = "Helsinki-NLP-opus-mt-en-sk" #hardcoded, so that tokenized dataset can be pickled
             self.isQuantized = False
             self.isPrepared = False
+
+
+
+
             print(
                 f"Created model {pretrained_model_name_or_path} succesfully!")
             print(f"Size of model: {self.getSize()}")
@@ -40,6 +49,9 @@ class ModelWrapper():
             self.model = model
             self.tokenizer = tokenizer
             self.isQuantized = isQuantized
+
+        self.seed = seed
+        torch.manual_seed(self.seed)
 
 
 
@@ -137,6 +149,8 @@ class ModelWrapper():
         """
         if test_tr:
             _test_translation(self)
+
+        self.model.train()
         self.model.to('cuda')
         # Specify quantization configuration
         # Start with simple min/max range estimation and per-tensor quantization of weights
@@ -183,9 +197,27 @@ class ModelWrapper():
         """
         return _makeQuantized(self, mode)
 
-    def reset(self):
+    def reset_obsolete(self):
         """Resets the model. Model can be trained from scratch.
         """
+
+        def reinit_model_weights(m: torch.nn.Module):
+            if hasattr(m, "children"):
+                for m_child in m.children():
+                    if hasattr(m_child, "reset_parameters"):
+                        m_child.reset_parameters()
+                    reinit_model_weights(m_child)
+
+        torch.manual_seed(self.seed)
+        reinit_model_weights(self.model)
+        # self.model._keys_to_ignore_on_save = None
+
+
+    def reset(self):
+        """Resets the model. Model can be trained from scratch.
+           Preserves positional embedings weights (if static)
+        """
+
         config = self.model.config
         model_type = type(self.model)
         self.model = model_type(config)
@@ -219,6 +251,8 @@ def _test_translation(model_wrapped: ModelWrapper):
     # model_wrapped.model.eval()
     tok = model_wrapped.tokenizer("My name is Sarah and I live in London, it is a very nice city", return_tensors="pt",
                           padding=True)
+
+    tok.to(model_wrapped.model.device)
     translated = model_wrapped.model.generate(**tok)
     print("Example translation:",[model_wrapped.tokenizer.decode(t, skip_special_tokens=True) for t in translated])
 
