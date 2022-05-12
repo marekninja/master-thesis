@@ -144,4 +144,4 @@ Training-Helsinki-NLP
 Helsinki-NLP
 /transformers/
 /transformers/
-/saved_models/trained/
+/saved_models/*
