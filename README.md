@@ -21,7 +21,7 @@
 
 filename | QAT | SQ | DQ | SiLU | ReLU | Embeddings Quant.
 :------------ | :-------------| :-------------| :------------- | :------------- | :------------- | :------------- 
-modeling_marian_ORIG.py |  |  | :white_check_mark: |  |  | |
+modeling_marian_ORIG.py |  |  | :white_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
 modeling_marian_quant_v2.py | :white_check_mark: |  :white_check_mark: | :white_check_mark: | :heavy_check_mark: | | |
 modeling_marian_quant_v2.1.py | :white_check_mark: |  :white_check_mark: | :white_check_mark: | :heavy_check_mark: | | :heavy_check_mark:|
 modeling_marian_quant_v3.py | :white_check_mark: |  :white_check_mark: | :white_check_mark: | | :heavy_check_mark: | :heavy_check_mark: |
@@ -30,14 +30,16 @@ This files need to be **manually** replaced in editable `🤗 Transformers` inst
 
 ## Instalation notes
  
-* in some cases it is needed to have **PyTorch installed ahead of this repo**
-    * tested PyTorch version: 1.11.0.dev20210929+cu102
+* it is needed to have **PyTorch installed ahead of requirements.txt**
+    * tested PyTorch version: 1.11.0.dev20210929+cu102 and 1.12.0.dev20220208+cu102
 
 * there might be some non-linux compatible libraries (e.g. pywin*), just skip them when it fails...
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+# PyTorch Preview (Nightly) with CUDA 11.3 - some quantization operations are from nightly
+pip install --pre torch --extra-index-url https://download.pytorch.org/whl/nightly/cu113
 pip install -r requirements.txt
 ```
 
