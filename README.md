@@ -103,7 +103,7 @@ In-Domain            |  Out-of-Domain
 
 
 ### Running scripts
-In our experiments we rely on `comet_lm` reporting. 
+In our experiments we rely on `comet_ml` reporting. 
 You can run any experiment like so:
 
 ```bash
